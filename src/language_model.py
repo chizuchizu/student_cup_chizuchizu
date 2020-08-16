@@ -14,7 +14,7 @@ params = {
     "max_seq_length": 64,
     "train_batch_size": 64,
     "eval_batch_size": 64,
-    "num_train_epochs": 5,
+    "num_train_epochs": 1,
     "learning_rate": 1e-4,
     "reprocess_input_data": True,
     "do_lower_case": True,
@@ -47,3 +47,6 @@ for language in LANGUAGES:
     train = preprocess(pd.read_csv(f"{DATA_PATH}{DATA_PATH}train_{language}_en.csv"))
 
     pred, raw_pred, f1_score, oof, oof_raw = bert_model.model(train, test, params, N_FOLDS, MODEL_NAME, MODEL_TYPE)
+
+    print(language, "model training have done")
+
