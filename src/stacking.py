@@ -7,6 +7,7 @@ import lightgbm as lgb
 from sklearn import metrics
 from sklearn.model_selection import StratifiedKFold
 from scipy import stats
+import matplotlib.pyplot as plt
 
 from src.bert_model import hack
 
@@ -18,6 +19,7 @@ NUM_CLASS = 4
 N_FOLDS = 4
 # augmentation = True
 memo = "first submit"
+make_submit_file = False
 
 params = {
     'objective': 'multiclass',
@@ -82,8 +84,11 @@ def preprocess():
         lang_train[f"{language}_pred"] += + 1
         lang_test[f"{language}_pred"] += + 1
 
-        train_X = np.concatenate([train_X, lang_train.values], 1)
-        test_X = np.concatenate([test_X, lang_test.values], 1)
+        train_X = pd.concat([lang_train, pd.DataFrame(train_X)], axis=1)
+        test_X = pd.concat([lang_test, pd.DataFrame(test_X)], axis=1)
+
+        # train_X = np.concatenate([train_X, lang_train.values], 1)
+        # test_X = np.concatenate([test_X, lang_test.values], 1)
 
     train_y = train['jobflag'].values - 1  # maps {1, 2, 3 ,4} -> {0, 1, 2, 3}
     return train_X, train_y, test_X
@@ -95,8 +100,8 @@ kfold = StratifiedKFold(n_splits=N_FOLDS)
 pred = np.zeros((test_X.shape[0], N_FOLDS))
 f1_score = 0
 for fold, (train_idx, valid_idx) in enumerate(kfold.split(train_X, train_y)):
-    X_train = train_X[train_idx]
-    X_valid = train_X[valid_idx]
+    X_train = train_X.loc[train_idx]
+    X_valid = train_X.loc[valid_idx]
     y_train = train_y[train_idx]
     y_valid = train_y[valid_idx]
 
@@ -123,6 +128,9 @@ for fold, (train_idx, valid_idx) in enumerate(kfold.split(train_X, train_y)):
     pred[:, fold] = hack(y_pred)
     f1_score += estimator.best_score["valid_1"]["macro_f1"] / N_FOLDS
 
+    lgb.plot_importance(estimator, importance_type="gain", max_num_features=25)
+    plt.show()
+
 pred = stats.mode(pred, axis=1)[0].flatten().astype(int)
 
 
@@ -133,7 +141,8 @@ def make_submit_file(pred, f1_score):
     submit.to_csv(f"../outputs/submit_stacking_{round(f1_score, 4)}_{memo}.csv", index=False, header=False)
 
 
-make_submit_file(pred, f1_score)
+if make_submit_file:
+    make_submit_file(pred, f1_score)
 
 print("f1_score: " + str(f1_score))
 print("DONE")
