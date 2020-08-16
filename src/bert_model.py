@@ -114,4 +114,7 @@ def model(train, test, params, n_folds, model_name, model_type):
 
     # y_pred = stats.mode(y_pred, axis=1)[0].flatten().astype(int)
 
-    return y_pred, raw_pred, f1_score, oof, oof_raw
+    test_pred = pd.DataFrame(np.concatenate([y_pred, raw_pred], 1))
+    oof_pred = pd.DataFrame(np.concatenate([oof, oof_raw], 1))
+
+    return test_pred, f1_score, oof_pred
