@@ -76,8 +76,6 @@ def model(train, test, params, n_folds, model_name, model_type):
     oof = np.zeros(train.shape[0])
     weight = len(train) / train["label"].value_counts().sort_index().values
 
-    # TODO: hackを使うところを考える
-
     f1_score = 0
 
     for fold, (train_idx, valid_idx) in enumerate(kfold.split(train["text"], train['label'])):
@@ -94,12 +92,15 @@ def model(train, test, params, n_folds, model_name, model_type):
         f1_score += result["f1"] / n_folds
 
         fold_pred, raw_outputs = model.predict(test['text'])
-        y_pred[:, fold] = hack(raw_outputs)
+        # y_pred[:, fold] = hack(raw_outputs)
+        y_pred += raw_outputs / n_folds
 
         oof_pred, oof_outputs = model.predict(X_valid)
         oof[valid_idx] = oof_pred
 
     print(f"mean f1_score: {f1_score}")
+
+    y_pred = hack(y_pred)
 
     y_pred = stats.mode(y_pred, axis=1)[0].flatten().astype(int)
 

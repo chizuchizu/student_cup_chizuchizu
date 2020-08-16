@@ -2,7 +2,7 @@ import pandas as pd
 
 from src import bert_model
 
-LANGUAGES = ["ja", "de"]
+LANGUAGES = ["ja", "de", "fr"]
 
 DATA_PATH = "../data/"
 SEED = 2020
