@@ -46,4 +46,4 @@ for language in LANGUAGES:
 
     train = preprocess(pd.read_csv(f"{DATA_PATH}{DATA_PATH}train_{language}_en.csv"))
 
-    pred, f1_score, oof = bert_model.model(train, test, params, N_FOLDS, MODEL_NAME, MODEL_TYPE)
+    pred, raw_pred, f1_score, oof, oof_raw = bert_model.model(train, test, params, N_FOLDS, MODEL_NAME, MODEL_TYPE)

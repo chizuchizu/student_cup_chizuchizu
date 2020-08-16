@@ -72,8 +72,9 @@ def hack(prob):
 def model(train, test, params, n_folds, model_name, model_type):
     kfold = StratifiedKFold(n_splits=n_folds)
 
-    y_pred = np.zeros_like(test.shape)
+    y_pred = np.zeros(test.shape[0])
     oof = np.zeros(train.shape[0])
+    oof_raw = np.zeros((train.shape[0], 4))
     weight = len(train) / train["label"].value_counts().sort_index().values
 
     f1_score = 0
@@ -96,12 +97,15 @@ def model(train, test, params, n_folds, model_name, model_type):
         y_pred += raw_outputs / n_folds
 
         oof_pred, oof_outputs = model.predict(X_valid)
-        oof[valid_idx] = oof_pred
+        # oof[valid_idx] = oof_pred
+        oof_raw[valid_idx, :] = oof_outputs
+        oof[valid_idx] = hack(oof_outputs)
 
     print(f"mean f1_score: {f1_score}")
 
+    raw_pred = y_pred.copy()
     y_pred = hack(y_pred)
 
     y_pred = stats.mode(y_pred, axis=1)[0].flatten().astype(int)
 
-    return y_pred, f1_score, oof
+    return y_pred, raw_pred, f1_score, oof, oof_raw
