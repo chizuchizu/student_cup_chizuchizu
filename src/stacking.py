@@ -8,6 +8,8 @@ from sklearn import metrics
 from sklearn.model_selection import StratifiedKFold
 from scipy import stats
 
+from src.bert_model import hack
+
 SEED = 2020
 BASE_PATH = '../data/'
 TEXT_COL = "description"
@@ -69,15 +71,17 @@ def preprocess():
         max_features=500,
     )
     word_vectorizer.fit(sentences)
-    print(train_X)
-    print((word_vectorizer.transform(train["description"])).toarray())
+    # print(train_X)
+    # print((word_vectorizer.transform(train["description"])).toarray())
 
     train_X = np.concatenate([train_X, (word_vectorizer.transform(train["description"])).toarray()], 1)
     test_X = np.concatenate([test_X, (word_vectorizer.transform(test["description"])).toarray()], 1)
 
     for language in languages:
-        lang_train = pd.read_csv(f"{BASE_PATH}languages/train_{language}.csv")
-        lang_test = pd.read_csv(f"{BASE_PATH}languages/test_{language}.csv")
+        lang_train = pd.read_csv(f"{BASE_PATH}languages/train_{language}.csv").iloc[:, 1:]
+        lang_test = pd.read_csv(f"{BASE_PATH}languages/test_{language}.csv").iloc[:, 1:]
+        lang_train[f"{language}_pred"] += + 1
+        lang_test[f"{language}_pred"] += + 1
 
         train_X = np.concatenate([train_X, lang_train.values], 1)
         test_X = np.concatenate([test_X, lang_test.values], 1)
@@ -115,8 +119,9 @@ for fold, (train_idx, valid_idx) in enumerate(kfold.split(train_X, train_y)):
         early_stopping_rounds=100,
     )
     print(fold + 1, "done")
-
-    pred[:, fold] = estimator.predict(test_X)
+    y_pred = estimator.predict(test_X)
+    # print(y_pred)
+    pred[:, fold] = hack(y_pred)
     f1_score += estimator.best_score["valid_1"]["macro_f1"] / N_FOLDS
 
 pred = stats.mode(pred, axis=1)[0].flatten().astype(int)
@@ -126,7 +131,10 @@ def make_submit_file(pred, f1_score):
     test_id = pd.read_csv(BASE_PATH + "test.csv")["id"]
     submit = pd.DataFrame({'index': test_id, 'pred': pred + 1})
     aug = "using_aug" if augmentation else "non_aug"
-    submit.to_csv(f"../outputs/submit_{aug}_lgb_{round(f1_score, 3)}_{memo}.csv", index=False, header=False)
+    submit.to_csv(f"../outputs/submit_{aug}_lgb_{round(f1_score, 4)}_{memo}.csv", index=False, header=False)
 
 
 make_submit_file(pred, f1_score)
+
+print("f1_score: " + str(f1_score))
+print("DONE")
