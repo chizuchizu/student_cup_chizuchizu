@@ -1,6 +1,4 @@
 import pandas as pd
-import numpy as np
-
 from src import bert_model
 
 LANGUAGES = ["ja", "de", "fr", "default"]
