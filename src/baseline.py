@@ -128,7 +128,7 @@ y_pred = np.zeros((test.shape[0], N_FOLDS))
 
 # print(groups)
 group_kfold = GroupKFold(n_splits=N_FOLDS)
-f1_score: int = 0
+f1_score: float = 0
 
 for fold, (train_idx, valid_idx) in enumerate(group_kfold.split(train.index, train['label'], groups)):
     # train.loc[train.iloc[valid_idx].index, 'fold_id'] = fold
