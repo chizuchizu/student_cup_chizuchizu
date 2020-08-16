@@ -23,15 +23,15 @@ N_FOLDS = 4
 MODEL_TYPE = "bert"
 MODEL_NAME = "bert-base-uncased"
 augmentation = False
-memo = "not_use_duplicate"
+memo = "hack_code_"
 # 1セットあたりのデータ
 SET_NUM = 2
 params = {
     # "output_dir": "outputs/",
-    "max_seq_length": 128,
-    "train_batch_size": 32,
+    "max_seq_length": 64,
+    "train_batch_size": 64,
     "eval_batch_size": 64,
-    "num_train_epochs": 1,
+    "num_train_epochs": 5,
     "learning_rate": 1e-4,
     "reprocess_input_data": True,
     "do_lower_case": True,
@@ -63,7 +63,8 @@ N_CLASSES = [404, 320, 345, 674]  # @yCarbonによる推定（過去フォーラ
 
 # 制約付き対数尤度最大化問題を解く
 def hack(prob):
-    logp = np.log(prob + 1e-16)
+    prob = np.where(prob < 0, 0, prob)
+    logp = np.log(prob + 1e-4)
     N = prob.shape[0]
     K = prob.shape[1]
 
@@ -100,7 +101,7 @@ train = train.rename(columns={TEXT_COL: 'text', TARGET: 'label'})
 train['label'] -= 1
 
 train["text"] = train["text"].str.replace(".", "").str.strip()
-train = train[~train["text"].duplicated()]
+# train = train[~train["text"].duplicated()]
 # train["text"] = train["text"].str.lower()
 
 train_aug["label"] -= 1
@@ -147,7 +148,8 @@ for fold, (train_idx, valid_idx) in enumerate(group_kfold.split(train.index, tra
     f1_score += result["f1"] / N_FOLDS
 
     fold_pred, raw_outputs = model.predict(test['text'])
-    y_pred[:, fold] = fold_pred
+
+    y_pred[:, fold] = hack(raw_outputs)
     # y_pred += fold_pred / N_FOLDS
     # print(y_pred)
 
@@ -161,4 +163,4 @@ submit = pd.DataFrame({'index': test['id'], 'pred': y_pred + 1})
 
 aug = "using_aug" if augmentation else "non_aug"
 
-# submit.to_csv(f"../outputs/submit_{aug}_{MODEL_NAME}_{round(f1_score, 3)}_{memo}.csv", index=False, header=False)
+submit.to_csv(f"../outputs/submit_{aug}_{MODEL_NAME}_{round(f1_score, 3)}_{memo}.csv", index=False, header=False)
