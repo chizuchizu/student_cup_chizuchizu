@@ -45,7 +45,7 @@ def hack(prob):
     print(prob)
 
     # prob = np.where(prob < 0, 0, prob)
-    logp = np.log(prob + 1e-4)
+    logp = np.log(prob + 1e-8)
     N = prob.shape[0]
     K = prob.shape[1]
 
