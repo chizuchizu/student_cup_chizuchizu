@@ -16,10 +16,9 @@ TEXT_COL = "description"
 TARGET = "jobflag"
 NUM_CLASS = 4
 N_FOLDS = 4
-augmentation = True
-memo = "group_kfold"
-# 1セットあたりのデータ
-SET_NUM = 2
+# augmentation = True
+memo = "first submit"
+
 params = {
     'objective': 'multiclass',
     'metric': 'custom',
@@ -130,8 +129,8 @@ pred = stats.mode(pred, axis=1)[0].flatten().astype(int)
 def make_submit_file(pred, f1_score):
     test_id = pd.read_csv(BASE_PATH + "test.csv")["id"]
     submit = pd.DataFrame({'index': test_id, 'pred': pred + 1})
-    aug = "using_aug" if augmentation else "non_aug"
-    submit.to_csv(f"../outputs/submit_{aug}_lgb_{round(f1_score, 4)}_{memo}.csv", index=False, header=False)
+    # aug = "using_aug" if augmentation else "non_aug"
+    submit.to_csv(f"../outputs/submit_stacking_{round(f1_score, 4)}_{memo}.csv", index=False, header=False)
 
 
 make_submit_file(pred, f1_score)
