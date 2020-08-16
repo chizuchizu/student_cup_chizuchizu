@@ -82,4 +82,4 @@ cvbooster = lgb.cv(params, dtrain, return_cvbooster=True, stratified=False,
 test_index = pd.read_csv(BASE_PATH + "test.csv")["id"]
 
 pred = np.stack(cvbooster.predict(test_X)).mean(axis=0).argmax(axis=1) + 1
-pd.DataFrame(pred, index=test_index).to_csv('lgb_0.569.csv', header=False)
+# pd.DataFrame(pred, index=test_index).to_csv('lgb_0.569.csv', header=False)
