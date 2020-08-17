@@ -24,8 +24,8 @@ train['label'] -= 1
 test = pd.read_csv(BASE_PATH + "test.csv").drop(['id'], axis=1)
 test = test.rename(columns={TEXT_COL: 'text', TARGET: 'label'})
 
-train.to_csv(BASE_PATH + 'train_x.csv',index = False)
-test.to_csv(BASE_PATH + 'test_x.csv',index = False)
+train.to_csv(BASE_PATH + 'train_x.csv',index = False, header=False)
+test.to_csv(BASE_PATH + 'test_x.csv',index = False, header=False)
 
 def preprocessing_text(text):
     for p in string.punctuation:
