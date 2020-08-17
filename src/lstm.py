@@ -67,9 +67,9 @@ else:
 TEXT.build_vocab(train_ds, vectors=fasttext, min_freq=3)#buildしないといけないらしいよくわからない
 
 #dataloaderの作成(cv実装したい)
-train_dl = torchtext.data.Iterator(train_ds, batch_size = 2, train = True)
-val_dl = torchtext.data.Iterator(val_ds, batch_size = 2, train = False, sort=False)
-test_dl = torchtext.data.Iterator(test_ds, batch_size = 2, train = False, sort = False)
+train_dl = torchtext.data.Iterator(train_ds, batch_size = 16, train = True)
+val_dl = torchtext.data.Iterator(val_ds, batch_size = 16, train = False, sort=False)
+test_dl = torchtext.data.Iterator(test_ds, batch_size =16, train = False, sort = False)
 dl_dict = {'train':train_dl,'val':val_dl,'test':test_dl}
 
 '''
@@ -93,14 +93,14 @@ class LSTMClassifier(nn.Module):
 
     
 
-model = LSTMClassifier(TEXT.vocab.vectors,128,NUM_CLASS)
+model = LSTMClassifier(TEXT.vocab.vectors,256,NUM_CLASS)
 #損失関数
 weight = len(train) / train["label"].value_counts().sort_index().values
-weights = torch.tensor(weight)
-# criterion = nn.CrossEntropyLoss(weight=weights)
-criterion = nn.CrossEntropyLoss()
+weights = torch.tensor(weight.tolist())
+criterion = nn.CrossEntropyLoss(weight=weights)
+# criterion = nn.CrossEntropyLoss()
 #オプティマイザー
-optimizer = optim.Adam(model.parameters())
+optimizer = optim.Adam(model.parameters(),lr= 0.01)
 
 def metric_f1(labels, preds):
     return f1_score(labels, preds, average='macro')
