@@ -8,7 +8,7 @@ test_pred = pd.read_csv("../data/languages/test_default.csv").iloc[:, 1:]
 CEが2.5以上のものをを利用
 """
 
-test["jobflag"] = test_pred["default_pred"]
+test["jobflag"] = test_pred["default_pred"].astype(int) + 1
 
 test = test[test_pred.iloc[:, 1:].max(axis=1) > 2.5]
 
