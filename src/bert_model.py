@@ -39,42 +39,45 @@ def seed_everything(seed):
 
 
 # 制約付き対数尤度最大化問題を解く
-def hack(prob):
-    scaler = MinMaxScaler()
-    prob = scaler.fit_transform(prob)
-    print(prob)
+def hack(prob, hack=True):
+    if hack:
+        scaler = MinMaxScaler()
+        prob = scaler.fit_transform(prob)
+        print(prob)
 
-    # prob = np.where(prob < 0, 0, prob)
-    logp = np.log(prob + 1e-8)
-    N = prob.shape[0]
-    K = prob.shape[1]
+        # prob = np.where(prob < 0, 0, prob)
+        logp = np.log(prob + 1e-8)
+        N = prob.shape[0]
+        K = prob.shape[1]
 
-    m = pulp.LpProblem('Problem', pulp.LpMaximize)  # 最大化問題
+        m = pulp.LpProblem('Problem', pulp.LpMaximize)  # 最大化問題
 
-    # 最適化する変数(= 提出ラベル)
-    x = pulp.LpVariable.dicts('x', [(i, j) for i in range(N) for j in range(K)], 0, 1, pulp.LpBinary)
+        # 最適化する変数(= 提出ラベル)
+        x = pulp.LpVariable.dicts('x', [(i, j) for i in range(N) for j in range(K)], 0, 1, pulp.LpBinary)
 
-    # log likelihood(目的関数)
-    log_likelihood = pulp.lpSum([x[(i, j)] * logp[i, j] for i in range(N) for j in range(K)])
-    m += log_likelihood
+        # log likelihood(目的関数)
+        log_likelihood = pulp.lpSum([x[(i, j)] * logp[i, j] for i in range(N) for j in range(K)])
+        m += log_likelihood
 
-    # 各データについて，1クラスだけを予測ラベルとする制約
-    for i in range(N):
-        m += pulp.lpSum([x[(i, k)] for k in range(K)]) == 1  # i.e., SOS1
+        # 各データについて，1クラスだけを予測ラベルとする制約
+        for i in range(N):
+            m += pulp.lpSum([x[(i, k)] for k in range(K)]) == 1  # i.e., SOS1
 
-    # 各クラスについて，推定個数の合計に関する制約
-    for k in range(K):
-        m += pulp.lpSum([x[(i, k)] for i in range(N)]) == N_CLASSES[k]
+        # 各クラスについて，推定個数の合計に関する制約
+        for k in range(K):
+            m += pulp.lpSum([x[(i, k)] for i in range(N)]) == N_CLASSES[k]
 
-    m.solve()  # 解く
+        m.solve()  # 解く
 
-    assert m.status == 1  # assert 最適 <=>（実行可能解が見つからないとエラー）
+        assert m.status == 1  # assert 最適 <=>（実行可能解が見つからないとエラー）
 
-    x_ast = np.array([[int(x[(i, j)].value()) for j in range(K)] for i in range(N)])  # 結果の取得
-    return x_ast.argmax(axis=1)  # 結果をonehotから -> {0, 1, 2, 3}のラベルに変換
+        x_ast = np.array([[int(x[(i, j)].value()) for j in range(K)] for i in range(N)])  # 結果の取得
+        return x_ast.argmax(axis=1)  # 結果をonehotから -> {0, 1, 2, 3}のラベルに変換
+    else:
+        return prob.argmax(axis=1)
 
 
-def model(train, test, params, n_folds, model_name, model_type):
+def model(train, test, params, n_folds, model_name, model_type, lb_hack):
     kfold = StratifiedKFold(n_splits=n_folds)
 
     y_pred = np.zeros((test.shape[0], 4))
@@ -108,7 +111,7 @@ def model(train, test, params, n_folds, model_name, model_type):
     print(f"mean f1_score: {f1_score}")
 
     raw_pred = y_pred.copy()
-    y_pred = hack(y_pred)
+    y_pred = hack(y_pred, lb_hack)
 
     # oof = hack(oof_raw)
 
