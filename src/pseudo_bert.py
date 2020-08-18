@@ -11,6 +11,7 @@ import pandas as pd
 from src import bert_model
 
 LANGUAGES = ["default"]
+LANGUAGES = ["ja", "de", "fr"]
 
 DATA_PATH = "../data/"
 SEED = 2020
@@ -23,9 +24,9 @@ LB_HACK = False
 params = {
     # "output_dir": "outputs/",
     "max_seq_length": 64,
-    "train_batch_size": 32,
+    "train_batch_size": 64,
     "eval_batch_size": 64,
-    "num_train_epochs": 1,
+    "num_train_epochs": 5,
     "learning_rate": 1e-4,
     "reprocess_input_data": True,
     # "do_lower_case": True,
