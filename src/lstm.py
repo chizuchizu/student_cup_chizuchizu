@@ -64,7 +64,7 @@ train_ds, val_ds = train_ds.split(split_ratio=0.8, random_state=random.seed(SEED
 
 # 一回
 # first = True
-if os.path.isfile(BASE_PATH + "src/.vector_cache/wiki.en.vec"):
+if not os.path.isfile(BASE_PATH + "src/.vector_cache/wiki.en.vec"):
     fasttext = torchtext.vocab.FastText(language="en")  # 分かち書きをvecotr化するここをfnとかにしたらフランス語に対応できるかも？
 else:
     fasttext = Vectors(name='.vector_cache/wiki.en.vec')
@@ -132,7 +132,7 @@ def train_model(model, dl_dict, criterion, optimizer, num_epochs):
                 loss.backward()
                 optimizer.step()
                 all_loss += loss.item()
-        print("train | epoch", epoch + 1, " | ", "loss", all_loss)
+        print("train | epoch", epoch + 1, " | ", "loss", all_loss / len(dl_dict["train"]))
         for batch in (dl_dict['val']):
             inputs = batch.text.to(device)  # 文章
             labels = batch.label.to(device)
