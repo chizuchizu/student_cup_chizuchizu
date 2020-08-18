@@ -15,7 +15,7 @@ from torch.optim.optimizer import Optimizer
 from functools import partial
 
 # confing
-SEED = 2020
+SEED = 2021
 random.seed(SEED)
 user = "chizuchizu"
 if user == "chizuchizu":
@@ -26,7 +26,8 @@ TEXT_COL = "description"
 TARGET = "jobflag"
 NUM_CLASS = 4
 N_FOLDS = 4
-SEED = 2021
+BS = 64
+NUM_EPOCHS = 50
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
@@ -91,9 +92,9 @@ else:
 TEXT.build_vocab(train_ds, vectors=fasttext, min_freq=3)  # buildしないといけないらしいよくわからない
 
 # dataloaderの作成(cv実装したい)
-train_dl = torchtext.data.Iterator(train_ds, batch_size=16, train=True)
-val_dl = torchtext.data.Iterator(val_ds, batch_size=16, train=False, sort=False)
-test_dl = torchtext.data.Iterator(test_ds, batch_size=16, train=False, sort=False)
+train_dl = torchtext.data.Iterator(train_ds, batch_size=BS, train=True)
+val_dl = torchtext.data.Iterator(val_ds, batch_size=BS, train=False, sort=False)
+test_dl = torchtext.data.Iterator(test_ds, batch_size=BS, train=False, sort=False)
 dl_dict = {'train': train_dl, 'val': val_dl, 'test': test_dl}
 
 '''
@@ -107,7 +108,11 @@ class LSTMClassifier(nn.Module):
         self.embeddings = nn.Embedding.from_pretrained(
             embeddings=text_id, freeze=True
         )
+        self.embedding_dropout = nn.Dropout2d(0.2)
         self.lstm = nn.LSTM(300, hidden_dim, batch_first=True)
+
+        self.gru = nn.GRU(300 * 2,60, bidirectional=True, batch_first=True)
+
         self.cls = nn.Linear(hidden_dim, num_label)
         # self.softmax = nn.LogSoftmax()
 
@@ -209,22 +214,23 @@ def train_model(model, dl_dict, criterion, optimizer, num_epochs):
                 optimizer.step()
                 all_loss += loss.item()
         print("train | epoch", epoch + 1, " | ", "loss", all_loss / len(dl_dict["train"]))
-        for batch in (dl_dict['val']):
-            inputs = batch.text.to(device)  # 文章
-            labels = batch.label.to(device)
-            optimizer.zero_grad()
-            with torch.set_grad_enabled(False):
-                outputs = model(inputs)
-                loss = criterion(outputs, labels)
-                _, preds = torch.max(outputs, 1)
-                all_labels += labels.tolist()
-                all_preds += preds.tolist()
-            # print(loss)
+        all_labels, all_preds = eval_model(model, dl_dict["val"])
+        # for batch in (dl_dict['val']):
+        #     inputs = batch.text.to(device)  # 文章
+        #     labels = batch.label.to(device)
+        #     optimizer.zero_grad()
+        #     with torch.set_grad_enabled(False):
+        #         outputs = model(inputs)
+        #         loss = criterion(outputs, labels)
+        #         _, preds = torch.max(outputs, 1)
+        #         all_labels += labels.tolist()
+        #         all_preds += preds.tolist()
+        # print(loss)
         # print(all_preds)
         train_f1 = f1_score(all_labels, all_preds, average="macro")
         print("val | epoch", epoch + 1, " | ", "f1", train_f1)
 
-        all_test_preds.append(eval_model(model, dl_dict["test"])[1])
+        # all_test_preds.append(eval_model(model, dl_dict["test"])[1])
         # for batch in dl_dict["test"]:
         #     inputs = batch.text.to(device)  # 文章
         #     labels = batch.label.to(device)
@@ -240,11 +246,11 @@ def train_model(model, dl_dict, criterion, optimizer, num_epochs):
     checkpoint_weights = np.array([2 ** epoch for epoch in range(num_epochs)])
     checkpoint_weights = checkpoint_weights / checkpoint_weights.sum()
 
-    test_y = np.average(all_test_preds, weights=checkpoint_weights, axis=0)
+    # test_y = np.average(all_test_preds, weights=checkpoint_weights, axis=0)
 
     # test_y = np.mean([])
 
     return model
 
 
-train_model(model, dl_dict, criterion, optimizer, 50)
+train_model(model, dl_dict, criterion, optimizer, NUM_EPOCHS)
