@@ -2,7 +2,7 @@ import string
 import random
 import os
 import pandas as pd
-from sklearn.model_selection import GroupKFold
+from sklearn.model_selection import KFold
 from sklearn.metrics import f1_score
 
 import torch
@@ -10,9 +10,12 @@ import torch.optim as optim
 import torch.nn as nn
 import torchtext
 from torchtext.vocab import Vectors
+from torchtext.data import Dataset
 import numpy as np
 from torch.optim.optimizer import Optimizer
 from functools import partial
+
+from src.load_data import load_data
 
 # confing
 SEED = 2021
@@ -27,7 +30,7 @@ TARGET = "jobflag"
 NUM_CLASS = 4
 N_FOLDS = 4
 BS = 256
-NUM_EPOCHS = 50
+NUM_EPOCHS = 100
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
@@ -72,20 +75,7 @@ TEXT = torchtext.data.Field(sequential=True,
 LABEL = torchtext.data.Field(sequential=False,
                              use_vocab=False)
 
-train_ds, test_ds = torchtext.data.TabularDataset.splits(
-    path=BASE_PATH, train='train_x.csv',
-    test='test_x.csv', format='csv',
-    fields=[('text', TEXT), ('label', LABEL)]
-)
 
-test_ds = torchtext.data.TabularDataset(
-    path=BASE_PATH + "test_x.csv",
-    format="csv",
-    fields=[("text", TEXT)],
-)
-
-# traindataをvalとtrainに分割(あとでcvをじっそうしたい)
-train_ds, val_ds = train_ds.split(split_ratio=0.8, random_state=random.seed(SEED))
 # print(vars(train_ds[0]))
 
 # 一回
@@ -94,15 +84,6 @@ if not os.path.isfile(BASE_PATH + "src/.vector_cache/wiki.en.vec"):
     fasttext = torchtext.vocab.FastText(language="en")  # 分かち書きをvecotr化するここをfnとかにしたらフランス語に対応できるかも？
 else:
     fasttext = Vectors(name='.vector_cache/wiki.en.vec')
-
-TEXT.build_vocab(train_ds, vectors=fasttext, min_freq=3)  # buildしないといけないらしいよくわからない
-TEXT.build_vocab(test_ds, vectors=fasttext, min_freq=3)
-
-# dataloaderの作成(cv実装したい)
-train_dl = torchtext.data.Iterator(train_ds, batch_size=BS, train=True)
-val_dl = torchtext.data.Iterator(val_ds, batch_size=BS, train=False, sort=False)
-test_dl = torchtext.data.Iterator(test_ds, batch_size=BS, train=False, sort=False)
-dl_dict = {'train': train_dl, 'val': val_dl, 'test': test_dl}
 
 '''
 embeddingsはidでくるものをvectorにする。
@@ -151,18 +132,8 @@ class LSTMClassifier(nn.Module):
         # conc = self.relu(conc)
         conc = self.dropout(conc)
 
-        out = self.out(conc)
+        out = self.out(self.relu(conc))
         return out
-
-
-model = LSTMClassifier(TEXT.vocab.vectors, 256, NUM_CLASS)
-# 損失関数
-weight = len(train) / train["label"].value_counts().sort_index().values
-weights = torch.tensor(weight.tolist()).to(device)
-criterion = nn.CrossEntropyLoss(weight=weights)
-# criterion = nn.CrossEntropyLoss()
-# オプティマイザー
-optimizer = optim.Adam(model.parameters(), lr=0.01)
 
 
 def metric_f1(labels, preds):
@@ -270,12 +241,46 @@ def train_model(model, dl_dict, criterion, optimizer, num_epochs):
     checkpoint_weights = np.array([2 ** epoch for epoch in range(num_epochs)])
     checkpoint_weights = checkpoint_weights / checkpoint_weights.sum()
 
-    test_y = np.average(all_test_preds, weights=checkpoint_weights, axis=0)
+    test_y = np.average(all_test_preds, weights=checkpoint_weights, axis=0).astype(float)
     test_y = np.round(test_y).astype(int)
 
     # test_y = np.mean([])
 
     return model, test_y
 
-model, test_y = train_model(model, dl_dict, criterion, optimizer, NUM_EPOCHS)
+
+train_ds, test_ds = torchtext.data.TabularDataset.splits(
+    path=BASE_PATH, train='train_x.csv',
+    test='test_x.csv', format='csv',
+    fields=[('text', TEXT), ('label', LABEL)]
+)
+test_ds = torchtext.data.TabularDataset(
+    path=BASE_PATH + "test_x.csv",
+    format="csv",
+    fields=[("text", TEXT)],
+)
+TEXT.build_vocab(train_ds, vectors=fasttext, min_freq=3)  # buildしないといけないらしいよくわからない
+TEXT.build_vocab(test_ds, vectors=fasttext, min_freq=3)
+kf = KFold(n_splits=4, shuffle=True, random_state=SEED)
+for tdx, vdx in kf.split(train_ds.examples):
+    data_arr = np.array(train_ds.examples)
+
+    train_dl = torchtext.data.Iterator(Dataset(data_arr[tdx], fields=[("text", TEXT), ("label", LABEL)]), batch_size=BS,
+                                       train=True)
+    val_dl = torchtext.data.Iterator(Dataset(data_arr[vdx], fields=[("text", TEXT), ("label", LABEL)]), batch_size=BS,
+                                     train=False, sort=False)
+    test_dl = torchtext.data.Iterator(test_ds, batch_size=BS, train=False, sort=False)
+    dl_dict = {'train': train_dl, 'val': val_dl, 'test': test_dl}
+
+    model = LSTMClassifier(TEXT.vocab.vectors, 128, NUM_CLASS)
+    # 損失関数
+    weight = len(train) / train["label"].value_counts().sort_index().values
+    weights = torch.tensor(weight.tolist()).to(device)
+    criterion = nn.CrossEntropyLoss(weight=weights)
+    # criterion = nn.CrossEntropyLoss()
+    # オプティマイザー
+    optimizer = optim.Adam(model.parameters(), lr=0.01)
+
+    model, test_y = train_model(model, dl_dict, criterion, optimizer, NUM_EPOCHS)
+
 print("DONE")
