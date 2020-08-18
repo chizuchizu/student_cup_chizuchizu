@@ -111,15 +111,23 @@ class LSTMClassifier(nn.Module):
         self.embedding_dropout = nn.Dropout2d(0.2)
         self.lstm = nn.LSTM(300, hidden_dim, batch_first=True)
 
-        self.gru = nn.GRU(300 * 2,60, bidirectional=True, batch_first=True)
+        self.gru = nn.GRU(256, 64, bidirectional=True, batch_first=True)
 
         self.cls = nn.Linear(hidden_dim, num_label)
         # self.softmax = nn.LogSoftmax()
 
     def forward(self, x):
         x_vec = self.embeddings(x)
-        _, lstm_out = self.lstm(x_vec)
-        out = self.cls(lstm_out[0].squeeze())
+        h_lstm, lstm_out = self.lstm(x_vec)
+        h_gru, hh_gru = self.gru(h_lstm)
+        hh_gru = hh_gru.view(-1, 64*2)
+
+        avg_pool = torch.mean(h_gru, 1)
+        # max_pool, _ = torch.max(h_gru, 1)
+        conc = torch.cat((hh_gru, avg_pool), 1)
+
+        # out = self.cls(lstm_out[0].squeeze())
+        out = self.cls(conc)
         return out
 
 
