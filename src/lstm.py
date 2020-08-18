@@ -64,10 +64,11 @@ train_ds, val_ds = train_ds.split(split_ratio=0.8, random_state=random.seed(SEED
 
 # 一回
 # first = True
-if not os.path.isfile(BASE_PATH + "src/.vector_cache/wiki.en.vec"):
-    fasttext = torchtext.vocab.FastText(language="en")  # 分かち書きをvecotr化するここをfnとかにしたらフランス語に対応できるかも？
+language = "en"
+if not os.path.isfile(f"/.vector_cache/wiki.{language}.vec"):
+    fasttext = torchtext.vocab.FastText(language=language)  # 分かち書きをvecotr化するここをfnとかにしたらフランス語に対応できるかも？
 else:
-    fasttext = Vectors(name='.vector_cache/wiki.en.vec')
+    fasttext = Vectors(name=f'.vector_cache/wiki.{language}.vec')
 
 TEXT.build_vocab(train_ds, vectors=fasttext, min_freq=3)  # buildしないといけないらしいよくわからない
 
