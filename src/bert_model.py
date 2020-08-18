@@ -117,7 +117,7 @@ def cross_pseudo_labeling(train, test, params, n_folds, model_name, model_type, 
         print(result)
         f1_score += result["f1"] / n_folds
 
-        fold_pred, raw_outputs = model.predict(test.loc[test_idx, 'text'])
+        fold_pred, raw_outputs = model.predict(test.iloc[test_idx]["text"].values)
         # y_pred[:, fold] = hack(raw_outputs)
         y_pred[test_idx, :] = raw_outputs
 
