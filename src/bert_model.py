@@ -86,7 +86,7 @@ def all_train(train, test, params, model_name, model_type, lb_hack):
 
     pred, raw_outputs = model.predict(test["description"])
 
-    y_pred = hack(pred, lb_hack)
+    y_pred = hack(raw_outputs, lb_hack)
     return y_pred
 
 
@@ -95,12 +95,12 @@ def cross_pseudo_labeling(train, test, params, n_folds, model_name, model_type, 
         StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=1234).split(train["text"], train["label"])
     )
     splits_test = list(
-        KFold(n_splits=n_folds, shuffle=True, random_state=1234).split(test["description"])
+        KFold(n_splits=n_folds, shuffle=True, random_state=1234).split(test["text"])
     )
 
-    y_pred = np.zeros((test.shape[0], 4))
+    y_pred = np.zeros((test.shape[0], n_folds))
     oof = np.zeros(train.shape[0])
-    oof_raw = np.zeros((train.shape[0], 4))
+    oof_raw = np.zeros((train.shape[0], n_folds))
     weight = len(train) / train["label"].value_counts().sort_index().values
 
     f1_score = 0
@@ -117,7 +117,7 @@ def cross_pseudo_labeling(train, test, params, n_folds, model_name, model_type, 
         print(result)
         f1_score += result["f1"] / n_folds
 
-        fold_pred, raw_outputs = model.predict(test['description'])
+        fold_pred, raw_outputs = model.predict(test.loc[test_idx, 'text'])
         # y_pred[:, fold] = hack(raw_outputs)
         y_pred[test_idx, :] = raw_outputs
 
@@ -143,9 +143,9 @@ def cross_pseudo_labeling(train, test, params, n_folds, model_name, model_type, 
 def model(train, test, params, n_folds, model_name, model_type, lb_hack):
     kfold = StratifiedKFold(n_splits=n_folds)
 
-    y_pred = np.zeros((test.shape[0], 4))
+    y_pred = np.zeros((test.shape[0], n_folds))
     oof = np.zeros(train.shape[0])
-    oof_raw = np.zeros((train.shape[0], 4))
+    oof_raw = np.zeros((train.shape[0], n_folds))
     weight = len(train) / train["label"].value_counts().sort_index().values
 
     f1_score = 0

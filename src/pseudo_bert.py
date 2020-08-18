@@ -10,7 +10,7 @@ https://www.kaggle.com/sakami/single-lstm-3rd-place
 import pandas as pd
 from src import bert_model
 
-LANGUAGES = ["ja", "de", "fr", "default"]
+LANGUAGES = ["default"]
 
 DATA_PATH = "../data/"
 SEED = 2020
@@ -25,7 +25,7 @@ params = {
     "max_seq_length": 64,
     "train_batch_size": 32,
     "eval_batch_size": 64,
-    "num_train_epochs": 5,
+    "num_train_epochs": 1,
     "learning_rate": 1e-4,
     "reprocess_input_data": True,
     # "do_lower_case": True,
@@ -73,8 +73,9 @@ for language in LANGUAGES:
     test["jobflag"] = test_pred.copy()
 
     print("pseudo labeling")
-    test_pred, f1_score, oof_pred = bert_model.cross_pseudo_labeling(train, test, params, N_FOLDS, MODEL_NAME,
-                                                                     MODEL_TYPE, LB_HACK)
+    for_pseudo_test = test.copy().rename(columns={"description": "text", "jobflag": "label"})
+    test_pred, f1_score, oof_pred = bert_model.cross_pseudo_labeling(train, for_pseudo_test, params, N_FOLDS,
+                                                                     MODEL_NAME, MODEL_TYPE, LB_HACK)
     print(language, "model training have done")
 
     lang_columns = [language + "_" + x for x in columns]
