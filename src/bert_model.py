@@ -87,7 +87,10 @@ def all_train(train, test, params, model_name, model_type, lb_hack):
     pred, raw_outputs = model.predict(test["description"])
 
     y_pred = hack(raw_outputs, lb_hack)
-    return y_pred
+
+    pseudo_idx = (pd.DataFrame(y_pred).max(axis=1) > 2.5)
+
+    return y_pred, pseudo_idx
 
 
 def cross_pseudo_labeling(train, test, params, n_folds, model_name, model_type, lb_hack):
@@ -129,6 +132,7 @@ def cross_pseudo_labeling(train, test, params, n_folds, model_name, model_type, 
     print(f"mean f1_score: {f1_score}")
 
     raw_pred = y_pred.copy()
+
     y_pred = hack(y_pred, lb_hack)
 
     # oof = hack(oof_raw)

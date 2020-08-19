@@ -10,21 +10,20 @@ https://www.kaggle.com/sakami/single-lstm-3rd-place
 import pandas as pd
 from src import bert_model
 
-LANGUAGES = ["default"]
-LANGUAGES = ["ja", "de", "fr"]
+LANGUAGES = ["ja", "de", "fr", "default"]
 
 DATA_PATH = "../data/"
 SEED = 2020
 N_FOLDS = 4
-MODEL_TYPE = "bert"
-MODEL_NAME = "bert-base-uncased"
+MODEL_TYPE = "roberta"
+MODEL_NAME = "roberta-base"
 # MODEL_TYPE = "xlnet"
 # MODEL_NAME = "xlnet-base-cased"  # xxlarge-v2
 LB_HACK = False
 params = {
     # "output_dir": "outputs/",
     "max_seq_length": 64,
-    "train_batch_size": 64,
+    "train_batch_size": 32,
     "eval_batch_size": 64,
     "num_train_epochs": 5,
     "learning_rate": 1e-4,
@@ -60,29 +59,30 @@ def preprocess(data, augment=True):
 """全データ学習"""
 
 columns = ["pred", "1_ce", "2_ce", "3_ce", "4_ce"]
-for language in LANGUAGES:
-    print(language)
-    if language != "default":
-        train = preprocess(pd.read_csv(f"{DATA_PATH}{DATA_PATH}train_{language}_en.csv"))
-    else:
-        train = preprocess(pd.read_csv(f"{DATA_PATH}train.csv"), augment=False)
-    """pseudo labeling"""
+for MODEL_TYPE, MODEL_NAME in zip(["bert", "roberta", "xlnet"], ["bert-base-uncased", "roberta-base", "xlnet-base-cased"]):
+    for language in LANGUAGES:
+        print(language)
+        if language != "default":
+            train = preprocess(pd.read_csv(f"{DATA_PATH}{DATA_PATH}train_{language}_en.csv"))
+        else:
+            train = preprocess(pd.read_csv(f"{DATA_PATH}train.csv"), augment=False)
+        """pseudo labeling"""
 
-    print("all_data")
-    test_pred = bert_model.all_train(train, test, params, MODEL_NAME, MODEL_TYPE, LB_HACK)
-    # test_pred.to_csv(f"{DATA_PATH}languages/test_{language}_{MODEL_NAME}_{LB_HACK}.csv"
-    test["jobflag"] = test_pred.copy()
+        print("all_data")
+        test_pred, pseudo_idx = bert_model.all_train(train, test, params, MODEL_NAME, MODEL_TYPE, LB_HACK)
+        # test_pred.to_csv(f"{DATA_PATH}languages/test_{language}_{MODEL_NAME}_{LB_HACK}.csv"
+        test["jobflag"] = test_pred.copy()
 
-    print("pseudo labeling")
-    for_pseudo_test = test.copy().rename(columns={"description": "text", "jobflag": "label"})
-    test_pred, f1_score, oof_pred = bert_model.cross_pseudo_labeling(train, for_pseudo_test, params, N_FOLDS,
-                                                                     MODEL_NAME, MODEL_TYPE, LB_HACK)
-    print(language, "model training have done")
+        print("pseudo labeling")
+        for_pseudo_test = test.copy().rename(columns={"description": "text", "jobflag": "label"}).loc[pseudo_idx]
+        test_pred, f1_score, oof_pred = bert_model.cross_pseudo_labeling(train, for_pseudo_test, params, N_FOLDS,
+                                                                         MODEL_NAME, MODEL_TYPE, LB_HACK)
+        print(language, "model training have done")
 
-    lang_columns = [language + "_" + x for x in columns]
+        lang_columns = [language + "_" + x for x in columns]
 
-    test_pred.columns = lang_columns
-    oof_pred.columns = lang_columns
+        test_pred.columns = lang_columns
+        oof_pred.columns = lang_columns
 
-    test_pred.to_csv(f"{DATA_PATH}languages/test_{language}_{MODEL_NAME}_{LB_HACK}_pseudo.csv")
-    oof_pred.to_csv(f"{DATA_PATH}languages/train_{language}_{MODEL_NAME}_{LB_HACK}_pseudo.csv")
+        test_pred.to_csv(f"{DATA_PATH}languages/test_{language}_{MODEL_NAME}_{LB_HACK}_pseudo.csv")
+        oof_pred.to_csv(f"{DATA_PATH}languages/train_{language}_{MODEL_NAME}_{LB_HACK}_pseudo.csv")
