@@ -19,7 +19,7 @@ TARGET = "jobflag"
 NUM_CLASS = 4
 N_FOLDS = 4
 # augmentation = True
-memo = "non_hack_use_half_pseudo"
+memo = "non_hack_use_half_pseudo_v2"
 make_submit_file = True
 LB_HACK = False
 
@@ -38,8 +38,8 @@ params = {
     'verbose': -1,
     'seed': 1,
 }
-languages = ["ja", "de", "fr", "default"]
-models = ["bert-base-uncased", "roberta-base", "xlnet-base-cased"]  # defaultはbert
+languages = ["ja", "default"]
+models = ["bert-base-uncased", "roberta-base"]  # defaultはbert
 calc_f1 = lambda y, p: metrics.f1_score(y, p.argmax(axis=1), average='macro')
 
 
