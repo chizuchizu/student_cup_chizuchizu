@@ -19,8 +19,8 @@ TARGET = "jobflag"
 NUM_CLASS = 4
 N_FOLDS = 4
 # augmentation = True
-memo = "non hack"
-make_submit_file = False
+memo = "non_hack_use_half_pseudo"
+make_submit_file = True
 LB_HACK = False
 
 params = {
@@ -38,8 +38,8 @@ params = {
     'verbose': -1,
     'seed': 1,
 }
-languages = ["ja", "fr", "de", "default"]
-models = ["bert-base-uncased"]  # defaultはbert
+languages = ["ja", "de", "fr", "default"]
+models = ["bert-base-uncased", "roberta-base", "xlnet-base-cased"]  # defaultはbert
 calc_f1 = lambda y, p: metrics.f1_score(y, p.argmax(axis=1), average='macro')
 
 
@@ -88,8 +88,8 @@ def preprocess():
 
     for model in models:
         for language in languages:
-            lang_train = pd.read_csv(f"{BASE_PATH}languages/train_{language}_{model}_False.csv").iloc[:, 1:]
-            lang_test = pd.read_csv(f"{BASE_PATH}languages/test_{language}_{model}_False.csv").iloc[:, 1:]
+            lang_train = pd.read_csv(f"{BASE_PATH}languages/train_{language}_{model}_{LB_HACK}_pseudo.csv").iloc[:, 1:]
+            lang_test = pd.read_csv(f"{BASE_PATH}languages/test_{language}_{model}_{LB_HACK}_pseudo.csv").iloc[:, 1:]
             lang_train[f"{language}_pred"] += + 1
             lang_test[f"{language}_pred"] += + 1
 
@@ -153,7 +153,7 @@ def make_submit_file(pred, f1_score):
     test_id = pd.read_csv(BASE_PATH + "test.csv")["id"]
     submit = pd.DataFrame({'index': test_id, 'pred': pred + 1})
     # aug = "using_aug" if augmentation else "non_aug"
-    submit.to_csv(f"../outputs/submit_stacking_{round(f1_score, 4)}_{memo}.csv", index=False, header=False)
+    submit.to_csv(f"../outputs/pseudo_stacking_{round(f1_score, 4)}_{memo}.csv", index=False, header=False)
 
 
 if make_submit_file:

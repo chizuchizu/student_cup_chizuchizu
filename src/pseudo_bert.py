@@ -10,7 +10,7 @@ https://www.kaggle.com/sakami/single-lstm-3rd-place
 import pandas as pd
 from src import bert_model
 
-LANGUAGES = ["ja", "de", "fr", "default"]
+LANGUAGES = ["ja", "default"]
 
 DATA_PATH = "../data/"
 SEED = 2020
@@ -59,7 +59,7 @@ def preprocess(data, augment=True):
 """全データ学習"""
 
 columns = ["pred", "1_ce", "2_ce", "3_ce", "4_ce"]
-for MODEL_TYPE, MODEL_NAME in zip(["bert", "roberta", "xlnet"], ["bert-base-uncased", "roberta-base", "xlnet-base-cased"]):
+for MODEL_TYPE, MODEL_NAME in zip(["bert", "roberta"], ["bert-base-uncased", "roberta-base"]):
     for language in LANGUAGES:
         print(language)
         if language != "default":

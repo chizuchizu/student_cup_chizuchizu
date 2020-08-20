@@ -88,7 +88,7 @@ def all_train(train, test, params, model_name, model_type, lb_hack):
 
     y_pred = hack(raw_outputs, lb_hack)
 
-    pseudo_idx = (pd.DataFrame(y_pred).max(axis=1) > 2.5)
+    pseudo_idx = (pd.DataFrame(raw_outputs).max(axis=1) > 3)
 
     return y_pred, pseudo_idx
 
