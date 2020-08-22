@@ -27,7 +27,7 @@ TEXT_COL = "description"
 TARGET = "jobflag"
 NUM_CLASS = 4
 N_FOLDS = 4
-BS = 256
+BS = 128
 NUM_EPOCHS = 50
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -56,6 +56,7 @@ train.to_csv(BASE_PATH + 'train_x.csv', index=False, header=False)
 test.to_csv(BASE_PATH + 'test_x.csv', index=False, header=False)
 print(train)
 
+
 def preprocessing_text(text):
     for p in string.punctuation:
         text = text.replace(p, '')
@@ -64,10 +65,11 @@ def preprocessing_text(text):
 
 
 TEXT = torchtext.data.Field(sequential=True,
-                            tokenize=preprocessing_text,
+                            tokenize="spacy",
                             use_vocab=True,
                             batch_first=True,
-                            fix_length=64,
+                            include_lengths=True,
+                            fix_length=128,
                             lower=True)
 
 LABEL = torchtext.data.Field(sequential=False,
@@ -85,7 +87,6 @@ else:
 '''
 embeddingsはidでくるものをvectorにする。
 '''
-
 
 class LSTMClassifier(nn.Module):
     def __init__(self, text_id, hidden_dim, num_label):
@@ -179,7 +180,7 @@ def eval_model(model, data_loader, is_train=False):
     all_labels = []
     all_preds = []
     for batch in data_loader:
-        inputs = batch.text.to(device)
+        inputs = batch.text[0].to(device)
         if is_train:
             labels = batch.label.to(device)
         with torch.set_grad_enabled(True):
@@ -195,7 +196,7 @@ def eval_model(model, data_loader, is_train=False):
 def train_model(model, dl_dict, criterion, optimizer, num_epochs):
     model.to(device)
     scale_fn = combine_scale_functions(
-        [partial(scale_cos, 1e-4, 5e-3), partial(scale_cos, 5e-3, 1e-3)], [0.2, 0.8])
+        [partial(scale_cos, 1e-4, 5e-3), partial(scale_cos, 5e-3, 1e-2)], [0.2, 0.8])
     scheduler = ParamScheduler(optimizer, scale_fn, num_epochs * len(dl_dict["train"]))
     all_test_preds = list()
     all_oof_preds = list()
@@ -203,8 +204,8 @@ def train_model(model, dl_dict, criterion, optimizer, num_epochs):
         all_loss = 0
         all_labels = []
         all_preds = []
-        for batch in (dl_dict['train']):
-            inputs = batch.text.to(device)  # 文章
+        for batch in dl_dict['train']:
+            inputs, inputs_length = batch.text[0].to(device), batch.text[1].to(device)  # 文章
             labels = batch.label.to(device)
             optimizer.zero_grad()
 
@@ -288,8 +289,8 @@ oof_pred = pd.DataFrame(oof)
 
 test_pred.columns = lang_columns
 oof_pred.columns = lang_columns
-test_pred.to_csv(f"../data/languages/test_{language}_lstm.csv")
-oof_pred.to_csv(f"../data/languages/train_{language}_lstm.csv")
+# test_pred.to_csv(f"../data/languages/test_{language}_lstm.csv")
+# oof_pred.to_csv(f"../data/languages/train_{language}_lstm.csv")
 # def make_submit_file(pred):
 #     test_id = pd.read_csv(BASE_PATH + "test.csv")["id"]
 #     submit = pd.DataFrame({'index': test_id, 'pred': pred + 1})
