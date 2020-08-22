@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from scipy.sparse import csr_matrix, hstack
 from keras.preprocessing.text import Tokenizer
 import lightgbm as lgb
@@ -8,6 +8,12 @@ from sklearn import metrics
 from sklearn.model_selection import StratifiedKFold
 from scipy import stats
 import matplotlib.pyplot as plt
+from sklearn.decomposition import TruncatedSVD
+from collections import defaultdict
+from gensim.models.keyedvectors import KeyedVectors
+from gensim.models import word2vec
+
+from sklearn.cluster import KMeans
 
 from src.bert_model import hack
 
@@ -18,8 +24,9 @@ TARGET = "jobflag"
 NUM_CLASS = 4
 N_FOLDS = 4
 # augmentation = True
-memo = "first submit"
+memo = "using_junjo_lgbm"
 make_submit_file = False
+LB_HACK = False
 
 params = {
     'objective': 'multiclass',
@@ -37,6 +44,7 @@ params = {
     'seed': 1,
 }
 languages = ["ja", "fr", "de", "default"]
+models = ["default", "roberta-base", "xlnet-base-cased"]  # defaultはbert
 calc_f1 = lambda y, p: metrics.f1_score(y, p.argmax(axis=1), average='macro')
 
 
@@ -55,7 +63,7 @@ def preprocess():
     sentences = pd.concat([train["description"], test["description"]])
 
     tokenizer = Tokenizer(
-        num_words=1000,
+        num_words=2000,
         lower=True,
 
     )  # 出現頻度上位{num_words}だけを用いる
@@ -69,7 +77,7 @@ def preprocess():
         analyzer="char",
         stop_words="english",
         ngram_range=(2, 6),
-        max_features=500,
+        max_features=1000,
     )
     word_vectorizer.fit(sentences)
     # print(train_X)
@@ -78,14 +86,55 @@ def preprocess():
     train_X = np.concatenate([train_X, (word_vectorizer.transform(train["description"])).toarray()], 1)
     test_X = np.concatenate([test_X, (word_vectorizer.transform(test["description"])).toarray()], 1)
 
-    for language in languages:
-        lang_train = pd.read_csv(f"{BASE_PATH}languages/train_{language}.csv").iloc[:, 1:]
-        lang_test = pd.read_csv(f"{BASE_PATH}languages/test_{language}.csv").iloc[:, 1:]
-        lang_train[f"{language}_pred"] += + 1
-        lang_test[f"{language}_pred"] += + 1
+    vec_count = CountVectorizer(min_df=0.1, max_features=400)
+    vec_count.fit(sentences)
+    train_X = np.concatenate([train_X, (vec_count.transform(train["description"])).toarray()], 1)
+    test_X = np.concatenate([test_X, (vec_count.transform(test["description"])).toarray()], 1)
 
-        train_X = pd.concat([lang_train, pd.DataFrame(train_X)], axis=1)
-        test_X = pd.concat([lang_test, pd.DataFrame(test_X)], axis=1)
+    text_svd = TruncatedSVD(n_components=100, algorithm="arpack", random_state=1234)
+    text_svd.fit(train_X)
+    train_X = text_svd.transform(train_X)
+    test_X = text_svd.transform(test_X)
+
+    kmeans = KMeans(n_clusters=100, random_state=10).fit(np.concatenate([train_X, test_X]))
+    train_X = np.concatenate([train_X, (kmeans.transform(train_X))], 1)
+    test_X = np.concatenate([test_X, (kmeans.transform(test_X))], 1)
+
+
+    for model\
+            in models:
+        for language in languages:
+            if model == "default":
+                lang_train = pd.read_csv(f"{BASE_PATH}languages/train_{language}.csv").iloc[:, 1:]
+                lang_test = pd.read_csv(f"{BASE_PATH}languages/test_{language}.csv").iloc[:, 1:]
+            else:
+                lang_train = pd.read_csv(f"{BASE_PATH}languages/train_{language}_{model}.csv").iloc[:, 1:]
+                lang_test = pd.read_csv(f"{BASE_PATH}languages/test_{language}_{model}.csv").iloc[:, 1:]
+            lang_train[f"{language}_pred"] += 1
+            lang_test[f"{language}_pred"] += 1
+
+
+            # lang_train = lang_train.rename(columns={f"{language}_pred": f"{language}_{model}_pred"})
+            # lang_test[f"{language}"]
+
+            columns = lang_train.columns
+            columns = [f"{language}_{model}_{column}" for column in columns]
+
+            lang_train.columns = columns.copy()
+            lang_test.columns = columns.copy()
+
+            train_X = pd.concat([lang_train, pd.DataFrame(train_X)], axis=1)
+            test_X = pd.concat([lang_test, pd.DataFrame(test_X)], axis=1)
+
+    lgbm_num = 24
+    for i in range(lgbm_num):
+        junjo_train = pd.read_csv(f"../data/languages/train_lgbm_{i}.csv")
+        junjo_test = pd.read_csv(f"../data/languages/test_lgbm_{i}.csv")
+        column = [f"lgbm_{i}"]
+        junjo_train.columns = column
+        junjo_test.columns = column
+        train_X = pd.concat([train_X, junjo_train], axis=1)
+        test_X = pd.concat([test_X, junjo_test], axis=1)
 
         # train_X = np.concatenate([train_X, lang_train.values], 1)
         # test_X = np.concatenate([test_X, lang_test.values], 1)
@@ -125,7 +174,7 @@ for fold, (train_idx, valid_idx) in enumerate(kfold.split(train_X, train_y)):
     print(fold + 1, "done")
     y_pred = estimator.predict(test_X)
     # print(y_pred)
-    pred[:, fold] = hack(y_pred)
+    pred[:, fold] = hack(y_pred, LB_HACK)
     f1_score += estimator.best_score["valid_1"]["macro_f1"] / N_FOLDS
 
     lgb.plot_importance(estimator, importance_type="gain", max_num_features=25)
