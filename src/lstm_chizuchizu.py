@@ -15,8 +15,6 @@ import numpy as np
 from torch.optim.optimizer import Optimizer
 from functools import partial
 
-from src.load_data import load_data
-
 # confing
 SEED = 2021
 random.seed(SEED)
@@ -30,7 +28,7 @@ TARGET = "jobflag"
 NUM_CLASS = 4
 N_FOLDS = 4
 BS = 256
-NUM_EPOCHS = 100
+NUM_EPOCHS = 50
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
@@ -56,7 +54,7 @@ test = test.rename(columns={TEXT_COL: 'text', TARGET: 'label'})
 
 train.to_csv(BASE_PATH + 'train_x.csv', index=False, header=False)
 test.to_csv(BASE_PATH + 'test_x.csv', index=False, header=False)
-
+print(train)
 
 def preprocessing_text(text):
     for p in string.punctuation:
@@ -74,7 +72,6 @@ TEXT = torchtext.data.Field(sequential=True,
 
 LABEL = torchtext.data.Field(sequential=False,
                              use_vocab=False)
-
 
 # print(vars(train_ds[0]))
 
@@ -132,7 +129,7 @@ class LSTMClassifier(nn.Module):
         # conc = self.relu(conc)
         conc = self.dropout(conc)
 
-        out = self.out(self.relu(conc))
+        out = self.out(conc)
         return out
 
 
@@ -201,6 +198,7 @@ def train_model(model, dl_dict, criterion, optimizer, num_epochs):
         [partial(scale_cos, 1e-4, 5e-3), partial(scale_cos, 5e-3, 1e-3)], [0.2, 0.8])
     scheduler = ParamScheduler(optimizer, scale_fn, num_epochs * len(dl_dict["train"]))
     all_test_preds = list()
+    all_oof_preds = list()
     for epoch in range(num_epochs):
         all_loss = 0
         all_labels = []
@@ -221,32 +219,21 @@ def train_model(model, dl_dict, criterion, optimizer, num_epochs):
                 all_loss += loss.item()
         print("train | epoch", epoch + 1, " | ", "loss", all_loss / len(dl_dict["train"]))
         all_labels, all_preds = eval_model(model, dl_dict["val"], is_train=True)
-
+        all_oof_preds.append(all_preds)
         train_f1 = f1_score(all_labels, all_preds, average="macro")
         print("val | epoch", epoch + 1, " | ", "f1", train_f1)
 
         all_test_preds.append(eval_model(model, dl_dict["test"], is_train=False)[1])
-        # for batch in dl_dict["test"]:
-        #     inputs = batch.text.to(device)  # 文章
-        #     labels = batch.label.to(device)
-        #     optimizer.zero_grad()
-        #     with torch.set_grad_enabled(False):
-        #         outputs = model(inputs)
-        #         loss = criterion(outputs, labels)
-        #         _, preds = torch.max(outputs, 1)
-        #         all_labels += labels.tolist()
-        #         all_preds += preds.tolist()
-        #     all_test_preds.append(all_preds)
-
-    checkpoint_weights = np.array([2 ** epoch for epoch in range(num_epochs)])
+    checkpoint_weights = np.array([3 ** epoch for epoch in range(num_epochs)])
     checkpoint_weights = checkpoint_weights / checkpoint_weights.sum()
 
     test_y = np.average(all_test_preds, weights=checkpoint_weights, axis=0).astype(float)
-    test_y = np.round(test_y).astype(int)
+    oof = np.average(all_oof_preds, weights=checkpoint_weights, axis=0).astype(float)
+    # test_y = np.round(test_y).astype(int)
 
     # test_y = np.mean([])
 
-    return model, test_y
+    return model, test_y, oof
 
 
 train_ds, test_ds = torchtext.data.TabularDataset.splits(
@@ -262,7 +249,10 @@ test_ds = torchtext.data.TabularDataset(
 TEXT.build_vocab(train_ds, vectors=fasttext, min_freq=3)  # buildしないといけないらしいよくわからない
 TEXT.build_vocab(test_ds, vectors=fasttext, min_freq=3)
 kf = KFold(n_splits=4, shuffle=True, random_state=SEED)
-for tdx, vdx in kf.split(train_ds.examples):
+y_pred = np.zeros(test.shape[0])
+oof = np.zeros(train.shape[0])
+for fold, (tdx, vdx) in enumerate(kf.split(train_ds.examples)):
+    print(fold + 1)
     data_arr = np.array(train_ds.examples)
 
     train_dl = torchtext.data.Iterator(Dataset(data_arr[tdx], fields=[("text", TEXT), ("label", LABEL)]), batch_size=BS,
@@ -281,6 +271,32 @@ for tdx, vdx in kf.split(train_ds.examples):
     # オプティマイザー
     optimizer = optim.Adam(model.parameters(), lr=0.01)
 
-    model, test_y = train_model(model, dl_dict, criterion, optimizer, NUM_EPOCHS)
+    model, test_y, oof_ = train_model(model, dl_dict, criterion, optimizer, NUM_EPOCHS)
+
+    y_pred += test_y / N_FOLDS
+    oof[vdx] = np.round(oof_.astype(float).astype(float)).astype(int)
+
+y_pred = np.round(y_pred.astype(float)).astype(int)
+
+language = "default"
+columns = ["pred"]
+
+lang_columns = [language + "_" + x for x in columns]
+
+test_pred = pd.DataFrame(y_pred)
+oof_pred = pd.DataFrame(oof)
+
+test_pred.columns = lang_columns
+oof_pred.columns = lang_columns
+test_pred.to_csv(f"../data/languages/test_{language}_lstm.csv")
+oof_pred.to_csv(f"../data/languages/train_{language}_lstm.csv")
+# def make_submit_file(pred):
+#     test_id = pd.read_csv(BASE_PATH + "test.csv")["id"]
+#     submit = pd.DataFrame({'index': test_id, 'pred': pred + 1})
+#     # aug = "using_aug" if augmentation else "non_aug"
+#     submit.to_csv(f"../outputs/lstm_v1.csv", index=False, header=False)
+#
+# make_submit_file(y_pred)
+
 
 print("DONE")
