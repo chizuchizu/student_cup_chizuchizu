@@ -75,7 +75,10 @@ for MODEL_TYPE, MODEL_NAME in zip(["bert", "roberta"], ["bert-base-uncased", "ro
 
         print("pseudo labeling")
         for_pseudo_test = test.copy().rename(columns={"description": "text", "jobflag": "label"}).loc[pseudo_idx]
-        test_pred, f1_score, oof_pred = bert_model.cross_pseudo_labeling(train, for_pseudo_test, params, N_FOLDS,
+        # for_pseudo_test.to_csv(f"../data/test_3_{language}_{MODEL_NAME}.csv")
+        # assert 0
+        # new_train = pd.concat([train, for_pseudo_test])
+        test_pred, f1_score, oof_pred = bert_model.cross_pseudo_labeling(train, for_pseudo_test, test, params, N_FOLDS,
                                                                          MODEL_NAME, MODEL_TYPE, LB_HACK)
         print(language, "model training have done")
 
