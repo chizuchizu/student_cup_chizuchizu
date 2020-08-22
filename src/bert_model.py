@@ -93,12 +93,12 @@ def all_train(train, test, params, model_name, model_type, lb_hack):
     return y_pred, pseudo_idx
 
 
-def cross_pseudo_labeling(train, test, params, n_folds, model_name, model_type, lb_hack):
+def cross_pseudo_labeling(train, pseudo_test, test, params, n_folds, model_name, model_type, lb_hack):
     splits = list(
         StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=1234).split(train["text"], train["label"])
     )
     splits_test = list(
-        KFold(n_splits=n_folds, shuffle=True, random_state=1234).split(test["text"])
+        KFold(n_splits=n_folds, shuffle=True, random_state=1234).split(test["jobflag"])
     )
 
     y_pred = np.zeros((test.shape[0], n_folds))
@@ -109,7 +109,7 @@ def cross_pseudo_labeling(train, test, params, n_folds, model_name, model_type, 
     f1_score = 0
 
     for fold, ((train_idx, valid_idx), (train_test_idx, test_idx)) in enumerate(zip(splits, splits_test)):
-        X_train = pd.concat([train.iloc[train_idx], test.iloc[train_test_idx]])
+        X_train = pd.concat([train.iloc[train_idx], pseudo_test])
         X_valid = train.iloc[valid_idx]
         model = ClassificationModel(model_type=model_type, model_name=model_name, num_labels=4,
                                     args=params, use_cuda=True, weight=weight.tolist())
@@ -120,11 +120,11 @@ def cross_pseudo_labeling(train, test, params, n_folds, model_name, model_type, 
         print(result)
         f1_score += result["f1"] / n_folds
 
-        fold_pred, raw_outputs = model.predict(test.iloc[test_idx]["text"].values)
+        fold_pred, raw_outputs = model.predict(test["description"].values)
         # y_pred[:, fold] = hack(raw_outputs)
-        y_pred[test_idx, :] = raw_outputs
+        y_pred[:, :] = raw_outputs / n_folds
 
-        oof_pred, oof_outputs = model.predict(X_valid["text"].values)  # 謎のバグが発生するので
+        oof_pred, oof_outputs = model.predict(X_valid["text"].values)  # 謎のバグが発生するので変換
         oof[valid_idx] = oof_pred
         oof_raw[valid_idx, :] = oof_outputs
         # oof[valid_idx] = hack(oof_outputs)
@@ -143,6 +143,7 @@ def cross_pseudo_labeling(train, test, params, n_folds, model_name, model_type, 
     oof_pred = pd.DataFrame(np.concatenate([oof.reshape(-1, 1), oof_raw], 1))
 
     return test_pred, f1_score, oof_pred
+
 
 def model(train, test, params, n_folds, model_name, model_type, lb_hack):
     kfold = StratifiedKFold(n_splits=n_folds)
