@@ -100,9 +100,7 @@ def preprocess():
     train_X = np.concatenate([train_X, (kmeans.transform(train_X))], 1)
     test_X = np.concatenate([test_X, (kmeans.transform(test_X))], 1)
 
-
-    for model\
-            in models:
+    for model in models:
         for language in languages:
             if model == "default":
                 lang_train = pd.read_csv(f"{BASE_PATH}languages/train_{language}.csv").iloc[:, 1:]
@@ -112,7 +110,6 @@ def preprocess():
                 lang_test = pd.read_csv(f"{BASE_PATH}languages/test_{language}_{model}.csv").iloc[:, 1:]
             lang_train[f"{language}_pred"] += 1
             lang_test[f"{language}_pred"] += 1
-
 
             # lang_train = lang_train.rename(columns={f"{language}_pred": f"{language}_{model}_pred"})
             # lang_test[f"{language}"]
@@ -138,6 +135,9 @@ def preprocess():
 
         # train_X = np.concatenate([train_X, lang_train.values], 1)
         # test_X = np.concatenate([test_X, lang_test.values], 1)
+
+    train_X = pd.concat([train_X, pd.read_csv("../data/languages/train_nn.csv")], axis=1)
+    test_X = pd.concat([test_X, pd.read_csv("../data/languages/test_nn.csv")], axis=1)
 
     train_y = train['jobflag'].values - 1  # maps {1, 2, 3 ,4} -> {0, 1, 2, 3}
     return train_X, train_y, test_X

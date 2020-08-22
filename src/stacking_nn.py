@@ -239,8 +239,8 @@ def f1(y_true, y_pred):
 
 
 model.compile(optimizer=optimizer, loss=tf.keras.losses.SparseCategoricalCrossentropy(), metrics=[f1])
-preds = np.zeros((test_X.shape[0], 4))
-
+pred = np.zeros((test_X.shape[0], 4))
+oof = np.zeros((train_X.shape[0], 4))
 for fold, (train_idx, valid_idx) in enumerate(kfold.split(train_X, train_y)):
     X_train = train_X.loc[train_idx]
     X_valid = train_X.loc[valid_idx]
@@ -250,6 +250,10 @@ for fold, (train_idx, valid_idx) in enumerate(kfold.split(train_X, train_y)):
     model.fit(X_train, y_train, validation_data=(X_valid, y_valid), epochs=epochs, verbose=2, batch_size=bs,
               callbacks=callbacks)
 
-    preds += model.predict(test_X.values) / N_FOLDS
+    pred += model.predict(test_X.values) / N_FOLDS
+    oof[valid_idx, :] = model.predict(X_valid)
     model.set_weights(init_weights1)
+columns = ["nn_0", "nn_1", "nn_2", "nn_3"]
+pd.DataFrame(pred, columns=columns).to_csv(f"../data/languages/test_nn.csv", index=False)
+pd.DataFrame(oof, columns=columns).to_csv(f"../data/languages/train_nn.csv", index=False)
 print("DONE")
