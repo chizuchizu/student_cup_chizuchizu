@@ -133,6 +133,6 @@ def preprocessing_text(text):
     text = re.sub('SEM', 'Search Engine Marketing', text)
     text = re.sub('CVE', ' Common Vulnerabilities and Exposure', text)
 
-    text = text.strip().split()
+    # text = text.strip().split()
 
     return text
