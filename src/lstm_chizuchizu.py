@@ -5,6 +5,7 @@ import pandas as pd
 from sklearn.model_selection import KFold
 from sklearn.metrics import f1_score
 
+import copy
 import torch
 import torch.optim as optim
 import torch.nn as nn
@@ -18,11 +19,11 @@ from functools import partial
 # confing
 SEED = 2021
 random.seed(SEED)
-user = "chizuchizu"
+user = "cf"
 if user == "chizuchizu":
     BASE_PATH = '../data/'
 else:
-    BASE_PATH = "./data"
+    BASE_PATH = "./data/"
 TEXT_COL = "description"
 TARGET = "jobflag"
 NUM_CLASS = 4
@@ -54,7 +55,7 @@ test = test.rename(columns={TEXT_COL: 'text', TARGET: 'label'})
 
 train.to_csv(BASE_PATH + 'train_x.csv', index=False, header=False)
 test.to_csv(BASE_PATH + 'test_x.csv', index=False, header=False)
-print(train)
+# print(train)
 
 
 def preprocessing_text(text):
@@ -79,10 +80,10 @@ LABEL = torchtext.data.Field(sequential=False,
 
 # 一回
 # first = True
-if not os.path.isfile(BASE_PATH + "src/.vector_cache/wiki.en.vec"):
-    fasttext = torchtext.vocab.FastText(language="en")  # 分かち書きをvecotr化するここをfnとかにしたらフランス語に対応できるかも？
-else:
-    fasttext = Vectors(name='.vector_cache/wiki.en.vec')
+# if not os.path.isfile(BASE_PATH + "src/.vector_cache/wiki.en.vec"):
+#     fasttext = torchtext.vocab.FastText(language="en")  # 分かち書きをvecotr化するここをfnとかにしたらフランス語に対応できるかも？
+# else:
+fasttext = Vectors(name='.vector_cache/wiki.en.vec')
 
 '''
 embeddingsはidでくるものをvectorにする。
@@ -136,6 +137,41 @@ class LSTMClassifier(nn.Module):
 
 def metric_f1(labels, preds):
     return f1_score(labels, preds, average='macro')
+
+class EMA:
+
+    def __init__(self, model, mu, level='batch', n=1):
+        # self.ema_model = copy.deepcopy(model)
+        self.mu = mu
+        self.level = level
+        self.n = n
+        self.cnt = self.n
+        self.shadow = {}
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                self.shadow[name] = param.data
+
+    def _update(self, model):
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                new_average = (1 - self.mu) * param.data + self.mu * self.shadow[name]
+                self.shadow[name] = new_average.clone()
+
+    def set_weights(self, ema_model):
+        for name, param in ema_model.named_parameters():
+            if param.requires_grad:
+                param.data = self.shadow[name]
+
+    def on_batch_end(self, model):
+        if self.level is 'batch':
+            self.cnt -= 1
+            if self.cnt == 0:
+                self._update(model)
+                self.cnt = self.n
+                
+    def on_epoch_end(self, model):
+        if self.level is 'epoch':
+            self._update(model)
 
 
 class ParamScheduler:
@@ -195,6 +231,10 @@ def eval_model(model, data_loader, is_train=False):
 
 def train_model(model, dl_dict, criterion, optimizer, num_epochs):
     model.to(device)
+    ema_model = copy.deepcopy(model)
+    ema_model.eval()
+    ema_n = int(len(dl_dict['train'].dataset) / (5 * BS))
+    ema = EMA(model, 0.9, n=ema_n)
     scale_fn = combine_scale_functions(
         [partial(scale_cos, 1e-4, 5e-3), partial(scale_cos, 5e-3, 1e-2)], [0.2, 0.8])
     scheduler = ParamScheduler(optimizer, scale_fn, num_epochs * len(dl_dict["train"]))
@@ -209,6 +249,8 @@ def train_model(model, dl_dict, criterion, optimizer, num_epochs):
             labels = batch.label.to(device)
             optimizer.zero_grad()
 
+            ema.on_batch_end(model)
+            
             scheduler.batch_step()
 
             with torch.set_grad_enabled(True):
@@ -225,6 +267,10 @@ def train_model(model, dl_dict, criterion, optimizer, num_epochs):
         print("val | epoch", epoch + 1, " | ", "f1", train_f1)
 
         all_test_preds.append(eval_model(model, dl_dict["test"], is_train=False)[1])
+    ema.set_weights(ema_model)
+    ema_model.lstm.flatten_parameters()
+    ema_model.gru.flatten_parameters()
+
     checkpoint_weights = np.array([3 ** epoch for epoch in range(num_epochs)])
     checkpoint_weights = checkpoint_weights / checkpoint_weights.sum()
 
@@ -263,6 +309,7 @@ for fold, (tdx, vdx) in enumerate(kf.split(train_ds.examples)):
     test_dl = torchtext.data.Iterator(test_ds, batch_size=BS, train=False, sort=False)
     dl_dict = {'train': train_dl, 'val': val_dl, 'test': test_dl}
 
+    
     model = LSTMClassifier(TEXT.vocab.vectors, 128, NUM_CLASS)
     # 損失関数
     weight = len(train) / train["label"].value_counts().sort_index().values
@@ -270,7 +317,9 @@ for fold, (tdx, vdx) in enumerate(kf.split(train_ds.examples)):
     criterion = nn.CrossEntropyLoss(weight=weights)
     # criterion = nn.CrossEntropyLoss()
     # オプティマイザー
-    optimizer = optim.Adam(model.parameters(), lr=0.01)
+    # optimizer = optim.SparseAdam(model.parameters(), lr=2e-4)
+    #SparseAdam,Adamax,ASGD,LBFGS,RMSprop,Rprop
+    optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
     model, test_y, oof_ = train_model(model, dl_dict, criterion, optimizer, NUM_EPOCHS)
 
