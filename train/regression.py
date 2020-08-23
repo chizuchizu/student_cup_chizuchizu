@@ -9,12 +9,12 @@ from sklearn.model_selection import StratifiedKFold
 from scipy import stats
 import matplotlib.pyplot as plt
 from sklearn.decomposition import TruncatedSVD
-from src.pp import preprocessing_text
+from sklearn.cluster import KMeans
+import pickle
 
-from src.bert_model import hack
 
 SEED = 2020
-BASE_PATH = '../data/'
+BASE_PATH = '../for_train_data/'
 TEXT_COL = "description"
 TARGET = "jobflag"
 NUM_CLASS = 4
@@ -38,18 +38,6 @@ params = {
     'verbose': -1,
     'seed': 1,
 }
-languages = ["ja", "fr", "de", "default"]
-models = ["default"]  # defaultはbert
-calc_f1 = lambda y, p: metrics.f1_score(y, p.argmax(axis=1), average='macro')
-
-
-def macro_f1(pred: np.array, data: lgb.Dataset):
-    y = data.get_label()
-    pred = pred.reshape(-1, len(y)).T  # -> (N, num_class)
-
-    f1 = calc_f1(y, pred)
-    return 'macro_f1', f1, True  # True means "higher is better"
-
 
 def preprocess():
     train = pd.read_csv(BASE_PATH + "train.csv").drop(['id'], axis=1)  # ["description"]
@@ -85,6 +73,11 @@ def preprocess():
     text_svd.fit(train_X)
     train_X = text_svd.transform(train_X)
     test_X = text_svd.transform(test_X)
+
+    kmeans = KMeans(n_clusters=100, random_state=10).fit(np.concatenate([train_X, test_X]))
+    train_X = np.concatenate([train_X, (kmeans.transform(train_X))], 1)
+    test_X = np.concatenate([test_X, (kmeans.transform(test_X))], 1)
+
 
     train_y = train['jobflag'].values - 1  # maps {1, 2, 3 ,4} -> {0, 1, 2, 3}
     return train_X, train_y, test_X
@@ -156,13 +149,15 @@ for i, flag_dict in enumerate(flag_list):
         estimator = lgb.train(
             params=params,
             train_set=d_train,
-            num_boost_round=1000,
+            num_boost_round=5000,
             valid_sets=[d_train, d_valid],
             # feval=macro_f1,
             verbose_eval=100,
             early_stopping_rounds=100,
         )
         print(fold + 1, "done")
+        file = f"../models/regression/{i}_{fold}.pkl"
+        pickle.dump(estimator, open(file, "wb"))
         y_pred = estimator.predict(test_X)
         # print(y_pred)
         pred += y_pred / N_FOLDS
