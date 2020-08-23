@@ -275,11 +275,18 @@ def train_model(model, dl_dict, criterion, optimizer, num_epochs):
     all_oof_preds_ema.append(all_preds)
     ema_f1 = f1_score(all_labels_ema, all_preds_ema, average="macro")
     print('ema f1', ema_f1)
+
+    test_labels_ema, test_preds_ema = eval_model(ema_model, dl_dict["test"], is_train=True)
+
+
     checkpoint_weights = np.array([3 ** epoch for epoch in range(num_epochs)])
     checkpoint_weights = checkpoint_weights / checkpoint_weights.sum()
     # eva/
     test_y = np.average(all_test_preds, weights=checkpoint_weights, axis=0).astype(float)
     oof = np.average(all_oof_preds, weights=checkpoint_weights, axis=0).astype(float)
+
+    test_y = np.mean([test_y, test_preds_ema], axis=0)
+    oof = np.mean([oof, all_oof_preds_ema], axis=0)
     # test_y = np.round(test_y).astype(int)
 
     # test_y = np.mean([])
