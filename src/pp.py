@@ -5,19 +5,6 @@ import time
 import re
 
 
-
-BASE_PATH = './data/'
-
-
-
-
-
-#load data 
-train = pd.read_csv(BASE_PATH + "train.csv")
-test = pd.read_csv(BASE_PATH + "test.csv")
-
-df = pd.concat([train, test])
-print(string.punctuation)
 def preprocessing_text(text):
     text = text.replace('&','and')
     for p in string.punctuation:
