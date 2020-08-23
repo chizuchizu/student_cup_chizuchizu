@@ -12,7 +12,7 @@ def preprocess(data, augment):
         data = data.drop(columns=["id"])
         data = data.rename(columns={"description": "text", "jobflag": "label"})
     # data = data.rename(columns={"description": "text", "jobflag": "label"})
-    data["text"] = data["text"].apply(preprocessing_text)
+    # data["text"] = data["text"].apply(preprocessing_text)
     data['label'] -= 1
     # 順序が違うとだめらしいので
     data = data.reindex(columns=["text", "label"])

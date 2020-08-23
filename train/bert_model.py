@@ -77,75 +77,7 @@ def hack(prob, hack=True):
         return prob.argmax(axis=1)
 
 
-def all_train(train, test, params, model_name, model_type, lb_hack):
-    weight = len(train) / train["label"].value_counts().sort_index().values
-
-    model = ClassificationModel(model_type=model_type, model_name=model_name, num_labels=4,
-                                args=params, use_cuda=True, weight=weight.tolist())
-    model.train_model(train)
-
-    pred, raw_outputs = model.predict(test["description"])
-
-    y_pred = hack(raw_outputs, lb_hack)
-
-    pseudo_idx = (pd.DataFrame(raw_outputs).max(axis=1) > 3)
-
-    return y_pred, pseudo_idx
-
-
-def cross_pseudo_labeling(train, pseudo_test, test, params, n_folds, model_name, model_type, lb_hack):
-    splits = list(
-        StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=1234).split(train["text"], train["label"])
-    )
-    splits_test = list(
-        KFold(n_splits=n_folds, shuffle=True, random_state=1234).split(test["jobflag"])
-    )
-
-    y_pred = np.zeros((test.shape[0], n_folds))
-    oof = np.zeros(train.shape[0])
-    oof_raw = np.zeros((train.shape[0], n_folds))
-    weight = len(train) / train["label"].value_counts().sort_index().values
-
-    f1_score = 0
-
-    for fold, (train_idx, valid_idx) in enumerate(splits):
-        X_train = pd.concat([train.iloc[train_idx], pseudo_test])
-        X_valid = train.iloc[valid_idx]
-        model = ClassificationModel(model_type=model_type, model_name=model_name, num_labels=4,
-                                    args=params, use_cuda=True, weight=weight.tolist())
-
-        model.train_model(X_train)
-
-        result, model_outputs, wrong_predictions = model.eval_model(X_valid, f1=metric_f1)
-        print(result)
-        f1_score += result["f1"] / n_folds
-
-        fold_pred, raw_outputs = model.predict(test["description"].values)
-        # y_pred[:, fold] = hack(raw_outputs)
-        y_pred[:, :] = raw_outputs / n_folds
-
-        oof_pred, oof_outputs = model.predict(X_valid["text"].values)  # 謎のバグが発生するので変換
-        oof[valid_idx] = oof_pred
-        oof_raw[valid_idx, :] = oof_outputs
-        # oof[valid_idx] = hack(oof_outputs)
-
-    print(f"mean f1_score: {f1_score}")
-
-    raw_pred = y_pred.copy()
-
-    y_pred = hack(y_pred, lb_hack)
-
-    # oof = hack(oof_raw)
-
-    # y_pred = stats.mode(y_pred, axis=1)[0].flatten().astype(int)
-
-    test_pred = pd.DataFrame(np.concatenate([y_pred.reshape(-1, 1), raw_pred], 1))
-    oof_pred = pd.DataFrame(np.concatenate([oof.reshape(-1, 1), oof_raw], 1))
-
-    return test_pred, f1_score, oof_pred
-
-
-def model(train, test, params, n_folds, model_name, model_type, lb_hack):
+def model(train, test, params, n_folds, model_name, model_type, lb_hack, prediction=False):
     kfold = StratifiedKFold(n_splits=n_folds)
 
     y_pred = np.zeros((test.shape[0], n_folds))
@@ -161,10 +93,14 @@ def model(train, test, params, n_folds, model_name, model_type, lb_hack):
 
         X_train = train.iloc[train_idx]
         X_valid = train.iloc[valid_idx]
+        if prediction:
+            model_name = args["output_dir"]
+
         model = ClassificationModel(model_type=model_type, model_name=model_name, num_labels=4,
                                     args=args, use_cuda=True, weight=weight.tolist())
 
-        model.train_model(X_train)
+        if not prediction:
+            model.train_model(X_train)
 
         result, model_outputs, wrong_predictions = model.eval_model(X_valid, f1=metric_f1)
         print(result)
