@@ -162,8 +162,8 @@ for i, flag_dict in enumerate(flag_list):
         f1_score += estimator.best_score["valid_1"]["rmse"] / N_FOLDS
     print("rmse", f1_score)
 
-    pd.Series(pred).to_csv(f"{BASE_PATH}languages/test_lgbm_{i}.csv", index=False)
-    pd.Series(oof).to_csv(f"{BASE_PATH}languages/train_lgbm_{i}.csv", index=False)
+    pd.Series(pred).to_csv(f"{BASE_PATH}regression/test_lgbm_{i}.csv", index=False)
+    pd.Series(oof).to_csv(f"{BASE_PATH}regression/train_lgbm_{i}.csv", index=False)
     mean_score += f1_score / 24
 print(mean_score)
 

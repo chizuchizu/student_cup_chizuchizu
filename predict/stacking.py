@@ -12,20 +12,20 @@ from sklearn.decomposition import TruncatedSVD
 from collections import defaultdict
 from gensim.models.keyedvectors import KeyedVectors
 from gensim.models import word2vec
-
+import pickle
 from sklearn.cluster import KMeans
 
 from src.bert_model import hack
 
 SEED = 2020
-BASE_PATH = '../data/'
+BASE_PATH = '../for_train_data/'
 TEXT_COL = "description"
 TARGET = "jobflag"
 NUM_CLASS = 4
 N_FOLDS = 4
 # augmentation = True
 memo = "using_junjo_lgbm"
-make_submit_file = False
+make_submit_file = True
 LB_HACK = False
 
 params = {
@@ -44,7 +44,7 @@ params = {
     'seed': 1,
 }
 languages = ["ja", "fr", "de", "default"]
-models = ["default", "roberta-base", "xlnet-base-cased"]  # defaultはbert
+models = ["bert-base-uncased", "roberta-base", "xlnet-base-cased"]  # defaultはbert
 calc_f1 = lambda y, p: metrics.f1_score(y, p.argmax(axis=1), average='macro')
 
 
@@ -102,31 +102,30 @@ def preprocess():
 
     for model in models:
         for language in languages:
-            if model == "default":
-                lang_train = pd.read_csv(f"{BASE_PATH}languages/train_{language}.csv").iloc[:, 1:]
-                lang_test = pd.read_csv(f"{BASE_PATH}languages/test_{language}.csv").iloc[:, 1:]
-            else:
-                lang_train = pd.read_csv(f"{BASE_PATH}languages/train_{language}_{model}.csv").iloc[:, 1:]
-                lang_test = pd.read_csv(f"{BASE_PATH}languages/test_{language}_{model}.csv").iloc[:, 1:]
-            lang_train[f"{language}_pred"] += 1
-            lang_test[f"{language}_pred"] += 1
+            for test_language in languages:
+                lang_train = pd.read_csv(f"{BASE_PATH}languages/train_{language}_{test_language}_{model}.csv").iloc[:, 1:]
+                lang_test = pd.read_csv(f"{BASE_PATH}languages/test_{language}_{test_language}_{model}.csv").iloc[:, 1:]
+                lang_train[f"{language}_pred"] += 1
+                lang_test[f"{language}_pred"] += 1
+                lang_test = lang_test.rename(columns={f"{language}_pred": f"{language}_{test_language}_pred"})
+                lang_train = lang_train.rename(columns={f"{language}_pred": f"{language}_{test_language}_pred"})
 
-            # lang_train = lang_train.rename(columns={f"{language}_pred": f"{language}_{model}_pred"})
-            # lang_test[f"{language}"]
+                # lang_train = lang_train.rename(columns={f"{language}_pred": f"{language}_{model}_pred"})
+                # lang_test[f"{language}"]
 
-            columns = lang_train.columns
-            columns = [f"{language}_{model}_{column}" for column in columns]
+                columns = lang_train.columns
+                columns = [f"{language}_{test_language}_{model}_{column}" for column in columns]
 
-            lang_train.columns = columns.copy()
-            lang_test.columns = columns.copy()
+                lang_train.columns = columns.copy()
+                lang_test.columns = columns.copy()
 
-            train_X = pd.concat([lang_train, pd.DataFrame(train_X)], axis=1)
-            test_X = pd.concat([lang_test, pd.DataFrame(test_X)], axis=1)
+                train_X = pd.concat([lang_train, pd.DataFrame(train_X)], axis=1)
+                test_X = pd.concat([lang_test, pd.DataFrame(test_X)], axis=1)
 
     lgbm_num = 24
     for i in range(lgbm_num):
-        junjo_train = pd.read_csv(f"../data/languages/train_lgbm_{i}.csv")
-        junjo_test = pd.read_csv(f"../data/languages/test_lgbm_{i}.csv")
+        junjo_train = pd.read_csv(f"{BASE_PATH}regression/train_lgbm_{i}.csv")
+        junjo_test = pd.read_csv(f"{BASE_PATH}regression/test_lgbm_{i}.csv")
         column = [f"lgbm_{i}"]
         junjo_train.columns = column
         junjo_test.columns = column
@@ -136,8 +135,8 @@ def preprocess():
         # train_X = np.concatenate([train_X, lang_train.values], 1)
         # test_X = np.concatenate([test_X, lang_test.values], 1)
 
-    train_X = pd.concat([train_X, pd.read_csv("../data/languages/train_nn.csv")], axis=1)
-    test_X = pd.concat([test_X, pd.read_csv("../data/languages/test_nn.csv")], axis=1)
+    train_X = pd.concat([train_X, pd.read_csv(f"{BASE_PATH}nn_stacking/train_nn.csv")], axis=1)
+    test_X = pd.concat([test_X, pd.read_csv(f"{BASE_PATH}nn_stacking/test_nn.csv")], axis=1)
 
     # train_X = pd.concat([train_X, pd.read_csv("../data/languages/train_default_lstm.csv").iloc[:, 1:]], axis=1)
     # test_X = pd.concat([test_X, pd.read_csv("../data/languages/test_default_lstm.csv").iloc[:, 1:]], axis=1)
@@ -165,23 +164,16 @@ for fold, (train_idx, valid_idx) in enumerate(kfold.split(train_X, train_y)):
     d_train = lgb.Dataset(X_train, label=y_train, weight=train_weight)
     d_valid = lgb.Dataset(X_valid, label=y_valid, weight=val_weight)
 
-    estimator = lgb.train(
-        params=params,
-        train_set=d_train,
-        num_boost_round=1000,
-        valid_sets=[d_train, d_valid],
-        feval=macro_f1,
-        verbose_eval=100,
-        early_stopping_rounds=100,
-    )
     print(fold + 1, "done")
+    file = f"../models/lgbm_stacking/{fold}.pkl"
+    estimator = pickle.load(open(file, "rb"))
     y_pred = estimator.predict(test_X)
     # print(y_pred)
     pred[:, fold] = hack(y_pred, LB_HACK)
     f1_score += estimator.best_score["valid_1"]["macro_f1"] / N_FOLDS
 
     lgb.plot_importance(estimator, importance_type="gain", max_num_features=25)
-    plt.show()
+    # plt.show()
 
 pred = stats.mode(pred, axis=1)[0].flatten().astype(int)
 
@@ -190,7 +182,7 @@ def make_submit_file(pred, f1_score):
     test_id = pd.read_csv(BASE_PATH + "test.csv")["id"]
     submit = pd.DataFrame({'index': test_id, 'pred': pred + 1})
     # aug = "using_aug" if augmentation else "non_aug"
-    submit.to_csv(f"../outputs/submit_stacking_{round(f1_score, 4)}_{memo}.csv", index=False, header=False)
+    submit.to_csv(f"{BASE_PATH}submit.csv", index=False, header=False)
 
 
 if make_submit_file:
