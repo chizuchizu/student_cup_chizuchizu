@@ -19,17 +19,17 @@ from functools import partial
 # confing
 SEED = 2021
 random.seed(SEED)
-user = "chizuchizu"
+user = "s"
 if user == "chizuchizu":
     BASE_PATH = '../for_train_data/'
 else:
-    BASE_PATH = "./data/"
+    BASE_PATH = "../data/"
 TEXT_COL = "description"
 TARGET = "jobflag"
 NUM_CLASS = 4
 N_FOLDS = 4
 BS = 128
-NUM_EPOCHS = 20
+NUM_EPOCHS = 2
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
@@ -81,9 +81,9 @@ LABEL = torchtext.data.Field(sequential=False,
 # 一回
 # first = True
 # if not os.path.isfile(BASE_PATH + "src/.vector_cache/wiki.en.vec"):
-fasttext = torchtext.vocab.FastText(language="en")  # 分かち書きをvecotr化するここをfnとかにしたらフランス語に対応できるかも？
+# fasttext = torchtext.vocab.FastText(language="en")  # 分かち書きをvecotr化するここをfnとかにしたらフランス語に対応できるかも？
 # else:
-fasttext = Vectors(name='.vector_cache/wiki.en.vec')
+fasttext = Vectors(name='../.vector_cache/wiki.en.vec')
 
 '''
 embeddingsはidでくるものをvectorにする。
@@ -229,7 +229,7 @@ def eval_model(model, data_loader, is_train=False):
     return all_labels, all_preds
 
 
-def train_model(model, dl_dict, criterion, optimizer, num_epochs):
+def train_model(model, dl_dict, criterion, optimizer, num_epochs,fold):
     model.to(device)
     ema_model = copy.deepcopy(model)
     ema_model.eval()
@@ -268,15 +268,21 @@ def train_model(model, dl_dict, criterion, optimizer, num_epochs):
         print("val | epoch", epoch + 1, " | ", "f1", train_f1)
 
         all_test_preds.append(eval_model(model, dl_dict["test"], is_train=False)[1])
+
+        model_dir = '../models/lstm/'
+        torch.save(model.state_dict(), os.path.join(model_dir, 'lstm_{}_epoch_{}.pth'.format(fold+1,epoch+1)))
+
+
     ema.set_weights(ema_model)
     ema_model.lstm.flatten_parameters()
     ema_model.gru.flatten_parameters()
+
     all_labels_ema, all_preds_ema = eval_model(ema_model, dl_dict["val"], is_train=True)
     all_oof_preds_ema.append(all_preds)
     ema_f1 = f1_score(all_labels_ema, all_preds_ema, average="macro")
     print('ema f1', ema_f1)
 
-    test_labels_ema, test_preds_ema = eval_model(ema_model, dl_dict["test"], is_train=True)
+    test_labels_ema, test_preds_ema = eval_model(ema_model, dl_dict["test"], is_train=False)
 
 
     checkpoint_weights = np.array([3 ** epoch for epoch in range(num_epochs)])
@@ -330,12 +336,12 @@ for fold, (tdx, vdx) in enumerate(kf.split(train_ds.examples)):
     # オプティマイザー
     optimizer = optim.Adam(model.parameters(), lr=0.01)
 
-    ema_model, model, test_y, oof_ = train_model(model, dl_dict, criterion, optimizer, NUM_EPOCHS)
+    ema_model, model, test_y, oof_ = train_model(model, dl_dict, criterion, optimizer, NUM_EPOCHS,fold)
 
-    model_path = f"../models/lstm/lstm_{fold}.pth"
-    model.save(model.state_dict(), model_path)
-    modle_path = f"../models/lstm/ema_{fold}.path"
-    model.save(ema_model.state_dict(), model_path)
+    model_path = f"../models/lstm/lstm_{fold+1}_all.pth"
+    torch.save(model.state_dict(), model_path)
+    modle_path = f"../models/lstm/ema_{fold+1}_all.pth"
+    torch.save(ema_model.state_dict(), model_path)
 
     y_pred += test_y / N_FOLDS
     oof[vdx] = np.round(oof_.astype(float).astype(float)).astype(int)
