@@ -29,7 +29,7 @@ TARGET = "jobflag"
 NUM_CLASS = 4
 N_FOLDS = 4
 BS = 128
-NUM_EPOCHS = 2
+NUM_EPOCHS = 50
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
@@ -138,10 +138,11 @@ class LSTMClassifier(nn.Module):
 def metric_f1(labels, preds):
     return f1_score(labels, preds, average='macro')
 
-class EMA:
+class EMA(nn.Module):
 
     def __init__(self, model, mu, level='batch', n=1):
         # self.ema_model = copy.deepcopy(model)
+        super(EMA, self).__init__()
         self.mu = mu
         self.level = level
         self.n = n
