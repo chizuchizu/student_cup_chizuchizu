@@ -29,7 +29,7 @@ TARGET = "jobflag"
 NUM_CLASS = 4
 N_FOLDS = 4
 BS = 128
-NUM_EPOCHS = 50
+NUM_EPOCHS = 20
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
@@ -240,6 +240,7 @@ def train_model(model, dl_dict, criterion, optimizer, num_epochs):
     scheduler = ParamScheduler(optimizer, scale_fn, num_epochs * len(dl_dict["train"]))
     all_test_preds = list()
     all_oof_preds = list()
+    all_oof_preds_ema = list()
     for epoch in range(num_epochs):
         all_loss = 0
         all_labels = []
@@ -270,10 +271,13 @@ def train_model(model, dl_dict, criterion, optimizer, num_epochs):
     ema.set_weights(ema_model)
     ema_model.lstm.flatten_parameters()
     ema_model.gru.flatten_parameters()
-
+    all_labels_ema, all_preds_ema = eval_model(ema_model, dl_dict["val"], is_train=True)
+    all_oof_preds_ema.append(all_preds)
+    ema_f1 = f1_score(all_labels_ema, all_preds_ema, average="macro")
+    print('ema f1', ema_f1)
     checkpoint_weights = np.array([3 ** epoch for epoch in range(num_epochs)])
     checkpoint_weights = checkpoint_weights / checkpoint_weights.sum()
-
+    # eva/
     test_y = np.average(all_test_preds, weights=checkpoint_weights, axis=0).astype(float)
     oof = np.average(all_oof_preds, weights=checkpoint_weights, axis=0).astype(float)
     # test_y = np.round(test_y).astype(int)
@@ -317,9 +321,7 @@ for fold, (tdx, vdx) in enumerate(kf.split(train_ds.examples)):
     criterion = nn.CrossEntropyLoss(weight=weights)
     # criterion = nn.CrossEntropyLoss()
     # オプティマイザー
-    # optimizer = optim.SparseAdam(model.parameters(), lr=2e-4)
-    #SparseAdam,Adamax,ASGD,LBFGS,RMSprop,Rprop
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = optim.Adam(model.parameters(), lr=0.01)
 
     model, test_y, oof_ = train_model(model, dl_dict, criterion, optimizer, NUM_EPOCHS)
 
