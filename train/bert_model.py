@@ -156,13 +156,13 @@ def model(train, test, params, n_folds, model_name, model_type, lb_hack):
     f1_score = 0
 
     for fold, (train_idx, valid_idx) in enumerate(kfold.split(train["text"], train['label'])):
-        output_dir = params["output_dir"]
-        params["output_dir"] = output_dir + "_" + str(fold + 1)
+        args = params.copy()
+        args["output_dir"] = params["output_dir"] + "_" + str(fold + 1)
 
         X_train = train.iloc[train_idx]
         X_valid = train.iloc[valid_idx]
         model = ClassificationModel(model_type=model_type, model_name=model_name, num_labels=4,
-                                    args=params, use_cuda=True, weight=weight.tolist())
+                                    args=args, use_cuda=True, weight=weight.tolist())
 
         model.train_model(X_train)
 

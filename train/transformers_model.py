@@ -3,7 +3,7 @@ from train import bert_model
 
 LANGUAGES = ["ja", "de", "fr", "default"]
 MODELS = [["bert", "bert-base-uncased"],
-          ["roberta", "roberta-bse"],
+          ["roberta", "roberta-base"],
           ["xlnet", "xlnet-base-cased"]]
 DATA_PATH = "../for_train_data/"
 SEED = 2020
@@ -20,7 +20,7 @@ params = {
     "num_train_epochs": 5,
     "learning_rate": 1e-4,
     "reprocess_input_data": True,
-    # "do_lower_case": True,
+    "do_lower_case": True,
     "manual_seed": SEED,
     "verbose": False,
     "save_model_every_epoch": False,
