@@ -108,7 +108,7 @@ def cross_pseudo_labeling(train, pseudo_test, test, params, n_folds, model_name,
 
     f1_score = 0
 
-    for fold, ((train_idx, valid_idx), (train_test_idx, test_idx)) in enumerate(zip(splits, splits_test)):
+    for fold, (train_idx, valid_idx) in enumerate(splits):
         X_train = pd.concat([train.iloc[train_idx], pseudo_test])
         X_valid = train.iloc[valid_idx]
         model = ClassificationModel(model_type=model_type, model_name=model_name, num_labels=4,
