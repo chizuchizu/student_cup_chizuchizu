@@ -37,6 +37,7 @@ N_FOLDS = 4
 # augmentation = True
 memo = "using_junjo_lgbm"
 make_submit_file = False
+debug = True
 LB_HACK = False
 
 params = {
@@ -251,10 +252,12 @@ for fold, (train_idx, valid_idx) in enumerate(kfold.split(train_X, train_y)):
 
     model.fit(X_train, y_train, validation_data=(X_valid, y_valid), epochs=epochs, verbose=2, batch_size=bs,
               callbacks=callbacks)
-    model.save(f"../models/nn_stacking/{fold}.h5")
+    if not debug:
+        model.save(f"../models/nn_stacking/{fold}.h5")
     pred += model.predict(test_X.values) / N_FOLDS
     oof[valid_idx, :] = model.predict(X_valid)
     model.set_weights(init_weights1)
+    print(0)
 columns = ["nn_0", "nn_1", "nn_2", "nn_3"]
 # pd.DataFrame(pred, columns=columns).to_csv(f"../data/languages/test_nn.csv", index=False)
 # pd.DataFrame(oof, columns=columns).to_csv(f"../data/languages/train_nn.csv", index=False)
