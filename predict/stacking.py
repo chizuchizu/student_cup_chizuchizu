@@ -28,23 +28,8 @@ memo = "using_junjo_lgbm"
 make_submit_file = True
 LB_HACK = False
 
-params = {
-    'objective': 'multiclass',
-    'metric': 'custom',
-    'num_class': 4,
-    'learning_rate': 0.01,
-    'max_depth': 10,
-    'num_leaves': 15,
-    'max_bin': 31,
-    'colsample_bytree': 0.8,
-    'subsample': 0.8,
-    'nthread': -1,
-    'bagging_freq': 1,
-    'verbose': -1,
-    'seed': 1,
-}
 languages = ["ja", "fr", "de", "default"]
-models = ["bert-base-uncased", "roberta-base", "xlnet-base-cased"]  # defaultはbert
+models = ["bert-base-uncased", "roberta-base"]  # defaultはbert
 calc_f1 = lambda y, p: metrics.f1_score(y, p.argmax(axis=1), average='macro')
 
 
@@ -135,8 +120,8 @@ def preprocess():
         # train_X = np.concatenate([train_X, lang_train.values], 1)
         # test_X = np.concatenate([test_X, lang_test.values], 1)
 
-    train_X = pd.concat([train_X, pd.read_csv(f"{BASE_PATH}nn_stacking/train_nn.csv")], axis=1)
-    test_X = pd.concat([test_X, pd.read_csv(f"{BASE_PATH}nn_stacking/test_nn.csv")], axis=1)
+    # train_X = pd.concat([train_X, pd.read_csv(f"{BASE_PATH}nn_stacking/train_nn.csv")], axis=1)
+    # test_X = pd.concat([test_X, pd.read_csv(f"{BASE_PATH}nn_stacking/test_nn.csv")], axis=1)
 
     # train_X = pd.concat([train_X, pd.read_csv("../data/languages/train_default_lstm.csv").iloc[:, 1:]], axis=1)
     # test_X = pd.concat([test_X, pd.read_csv("../data/languages/test_default_lstm.csv").iloc[:, 1:]], axis=1)
