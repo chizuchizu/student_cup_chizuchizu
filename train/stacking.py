@@ -60,6 +60,9 @@ def preprocess():
     train = pd.read_csv(BASE_PATH + "train.csv").drop(['id'], axis=1)  # ["description"]
     test = pd.read_csv(BASE_PATH + "test.csv").drop(["id"], axis=1)  # ["description"]
 
+    train['str_length'] = train['description'].apply(lambda x: len(x))
+    test['str_length'] = test['description'].apply(lambda x: len(x))
+
     sentences = pd.concat([train["description"], test["description"]])
 
     tokenizer = Tokenizer(
