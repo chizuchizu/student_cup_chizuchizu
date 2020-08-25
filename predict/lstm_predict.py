@@ -231,67 +231,57 @@ def eval_model(model, data_loader, is_train=False):
                 all_labels += labels.tolist()
             all_preds += pred.tolist()
 
-    return all_labels, all_preds, outputs.cpu().numpy()
+    return all_labels, all_preds
 
 
-def train_model(model, dl_dict, criterion, optimizer, num_epochs):
+def train_model(model, ema_model, dl_dict, criterion, optimizer, num_epochs):
     model.to(device)
-    ema_model = copy.deepcopy(model)
+    # ema_model = copy.deepcopy(model)
     ema_model.eval()
     ema_n = int(len(dl_dict['train'].dataset) / (5 * BS))
     ema = EMA(model, 0.9, n=ema_n)
     scale_fn = combine_scale_functions(
-        [partial(scale_cos, 1e-4, 5e-3), partial(scale_cos, 5e-3, 1e-3)], [0.2, 0.8])
+        [partial(scale_cos, 1e-4, 5e-3), partial(scale_cos, 5e-3, 1e-2)], [0.2, 0.8])
     scheduler = ParamScheduler(optimizer, scale_fn, num_epochs * len(dl_dict["train"]))
     all_test_preds = list()
     all_oof_preds = list()
     all_oof_preds_ema = list()
-    all_test_output = list()
-    all_oof_output = list()
-    all_oof_output_ema = list()
-    all_test_output_ema = list()
-    for epoch in range(num_epochs):
-        all_loss = 0
-        all_labels = []
-        all_preds = []
-        for batch in dl_dict['train']:
-            inputs, inputs_length = batch.text[0].to(device), batch.text[1].to(device)  # 文章
-            labels = batch.label.to(device)
-            optimizer.zero_grad()
-
-            ema.on_batch_end(model)
-
-            scheduler.batch_step()
-
-            with torch.set_grad_enabled(True):
-                outputs = model(inputs)
-                loss = criterion(outputs, labels)
-                _, preds = torch.max(outputs, 1)
-                loss.backward()
-                optimizer.step()
-                all_loss += loss.item()
-        print("train | epoch", epoch + 1, " | ", "loss", all_loss / len(dl_dict["train"]))
-        all_labels, all_preds, output_pred = eval_model(model, dl_dict["val"], is_train=True)
-        all_oof_preds.append(all_preds)
-        all_oof_output.append(output_pred)
-        train_f1 = f1_score(all_labels, all_preds, average="macro")
-        print("val | epoch", epoch + 1, " | ", "f1", train_f1)
-
-        test_labels, test_preds, test_output = eval_model(model, dl_dict["test"], is_train=False)
-        all_test_preds.append(test_preds)
-        all_oof_output_ema.append(test_output)
-        # all_test_preds.append(eval_model(model, dl_dict["test"], is_train=False)[1])
-
-    ema.set_weights(ema_model)
-    ema_model.lstm.flatten_parameters()
-    ema_model.gru.flatten_parameters()
-    all_labels_ema, all_preds_ema, output_pred_ema = eval_model(ema_model, dl_dict["val"], is_train=True)
+    # for epoch in range(num_epochs):
+    #     all_loss = 0
+    #     all_labels = []
+    #     all_preds = []
+    #     for batch in dl_dict['train']:
+    #         inputs, inputs_length = batch.text[0].to(device), batch.text[1].to(device)  # 文章
+    #         labels = batch.label.to(device)
+    #         optimizer.zero_grad()
+    #
+    #         ema.on_batch_end(model)
+    #
+    #         scheduler.batch_step()
+    #
+    #         with torch.set_grad_enabled(True):
+    #             outputs = model(inputs)
+    #             loss = criterion(outputs, labels)
+    #             _, preds = torch.max(outputs, 1)
+    #             loss.backward()
+    #             optimizer.step()
+    #             all_loss += loss.item()
+    #     print("train | epoch", epoch + 1, " | ", "loss", all_loss / len(dl_dict["train"]))
+    #     all_labels, all_preds = eval_model(model, dl_dict["val"], is_train=True)
+    #     all_oof_preds.append(all_preds)
+    #     train_f1 = f1_score(all_labels, all_preds, average="macro")
+    #     print("val | epoch", epoch + 1, " | ", "f1", train_f1)
+    #
+    #     all_test_preds.append(eval_model(model, dl_dict["test"], is_train=False)[1])
+    # ema.set_weights(ema_model)
+    # ema_model.lstm.flatten_parameters()
+    # ema_model.gru.flatten_parameters()
+    all_labels_ema, all_preds_ema = eval_model(ema_model, dl_dict["val"], is_train=True)
     all_oof_preds_ema.append(all_preds_ema)
-    # all_oof_output_ema.append(output_pred_ema)
     ema_f1 = f1_score(all_labels_ema, all_preds_ema, average="macro")
     print('ema f1', ema_f1)
 
-    test_labels_ema, test_preds_ema, output_test_ema = eval_model(ema_model, dl_dict["test"], is_train=False)
+    test_labels_ema, test_preds_ema = eval_model(ema_model, dl_dict["test"], is_train=False)
 
     checkpoint_weights = np.array([3 ** epoch for epoch in range(num_epochs)])
     checkpoint_weights = checkpoint_weights / checkpoint_weights.sum()
@@ -299,13 +289,8 @@ def train_model(model, dl_dict, criterion, optimizer, num_epochs):
     test_y = np.average(all_test_preds, weights=checkpoint_weights, axis=0).astype(float)
     oof = np.average(all_oof_preds, weights=checkpoint_weights, axis=0).astype(float)
 
-    output_y = np.average(all_oof_output, weights=checkpoint_weights, axis=0).astype(float)
-    output_oof = np.average(all_test_preds, weights=checkpoint_weights, axis=0).astype(float)
-
     test_y = np.mean([test_y, test_preds_ema], axis=0)
     oof = np.mean([oof, all_oof_preds_ema], axis=0)
-    test_y = np.array(test_preds_ema)
-    oof = np.array(all_oof_preds_ema)
     # test_y = np.round(test_y).astype(int)
 
     # test_y = np.mean([])
@@ -347,31 +332,36 @@ for fold, (tdx, vdx) in enumerate(kf.split(train_ds.examples)):
     # criterion = nn.CrossEntropyLoss()
     # オプティマイザー
     optimizer = optim.Adam(model.parameters(), lr=0.01)
-
-    ema_model, model, test_y, oof_ = train_model(model, dl_dict, criterion, optimizer, NUM_EPOCHS)
-    model_path = f"../models/lstm/ema_{fold}.pth"
-    # torch.save(ema_model.state_dict(), model_path)
     model_path = f"../models/lstm/lstm_{fold}.pth"
+    model.load_state_dict(torch.load(model_path))
+
+    model_path = f"../models/lstm/ema_{fold}.pth"
+    ema_model = copy.deepcopy(model)
+    ema_model.load_state_dict(torch.load(model_path))
+
+    ema_model, model, test_y, oof_ = train_model(model, ema_model, dl_dict, criterion, optimizer, NUM_EPOCHS)
+    # model_path = f"../models/lstm/ema_{fold}.pth"
+    # torch.save(ema_model.state_dict(), model_path)
+    # model_path = f"../models/lstm/lstm_{fold}.pth"
     # torch.save(model.state_dict(), model_path)
 
     y_pred += test_y / N_FOLDS
-    oof[vdx] = oof_  # np.round(oof_.astype(float).astype(float)).astype(int)
+    oof[vdx] = np.round(oof_.astype(float).astype(float)).astype(int)
 
-    # y_pred = np.round(y_pred.astype(float)).astype(int)
-    model_path = f"../models/lstm/ema_{fold}.pth"
+# y_pred = np.round(y_pred.astype(float)).astype(int)
 
 language = "default"
 columns = ["pred"]
 
-lang_columns = [language + "_lstm_" + x for x in columns]
+lang_columns = [language + "_" + x for x in columns]
 
 test_pred = pd.DataFrame(y_pred)
 oof_pred = pd.DataFrame(oof)
 
 test_pred.columns = lang_columns
 oof_pred.columns = lang_columns
-test_pred.to_csv(f"../for_train_data/lstm/test_{language}_lstm.csv", index=False)
-oof_pred.to_csv(f"../for_train_data/lstm/train_{language}_lstm.csv", index=False)
+# test_pred.to_csv(f"../data/languages/test_{language}_lstm.csv")
+# oof_pred.to_csv(f"../data/languages/train_{language}_lstm.csv")
 # def make_submit_file(pred):
 #     test_id = pd.read_csv(BASE_PATH + "test.csv")["id"]
 #     submit = pd.DataFrame({'index': test_id, 'pred': pred + 1})

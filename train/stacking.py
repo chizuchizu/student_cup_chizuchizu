@@ -26,6 +26,7 @@ N_FOLDS = 4
 # augmentation = True
 memo = "using_junjo_lgbm"
 make_submit_file = False
+debug = True
 LB_HACK = False
 
 params = {
@@ -135,9 +136,11 @@ def preprocess():
         # train_X = np.concatenate([train_X, lang_train.values], 1)
         # test_X = np.concatenate([test_X, lang_test.values], 1)
 
+    train_X = pd.concat([train_X, pd.read_csv(f"{BASE_PATH}lstm/train_default_lstm.csv")], axis=1)
+    test_X = pd.concat([test_X, pd.read_csv(f"{BASE_PATH}lstm/test_default_lstm.csv")], axis=1)
+
     # train_X = pd.concat([train_X, pd.read_csv(f"{BASE_PATH}nn_stacking/train_nn.csv")], axis=1)
     # test_X = pd.concat([test_X, pd.read_csv(f"{BASE_PATH}nn_stacking/test_nn.csv")], axis=1)
-
     # train_X = pd.concat([train_X, pd.read_csv("../data/languages/train_default_lstm.csv").iloc[:, 1:]], axis=1)
     # test_X = pd.concat([test_X, pd.read_csv("../data/languages/test_default_lstm.csv").iloc[:, 1:]], axis=1)
 
@@ -174,15 +177,17 @@ for fold, (train_idx, valid_idx) in enumerate(kfold.split(train_X, train_y)):
         early_stopping_rounds=100,
     )
     print(fold + 1, "done")
-    file = f"../models/lgbm_stacking/{fold}.pkl"
-    pickle.dump(estimator, open(file, "wb"))
+    if not debug:
+        file = f"../models/lgbm_stacking/{fold}.pkl"
+        pickle.dump(estimator, open(file, "wb"))
     y_pred = estimator.predict(test_X)
     # print(y_pred)
     pred[:, fold] = hack(y_pred, LB_HACK)
     f1_score += estimator.best_score["valid_1"]["macro_f1"] / N_FOLDS
 
     lgb.plot_importance(estimator, importance_type="gain", max_num_features=25)
-    # plt.show()
+    if debug:
+        plt.show()
 
 pred = stats.mode(pred, axis=1)[0].flatten().astype(int)
 
