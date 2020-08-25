@@ -1,3 +1,4 @@
+import re
 import pandas as pd
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
@@ -60,8 +61,15 @@ def preprocess():
     train = pd.read_csv(BASE_PATH + "train.csv").drop(['id'], axis=1)  # ["description"]
     test = pd.read_csv(BASE_PATH + "test.csv").drop(["id"], axis=1)  # ["description"]
 
-    train['str_length'] = train['description'].apply(lambda x: len(x))
+    train['str_length'] = train['description'].apply(lambda x: len(x))# 文字数カウント
+    train["lower_num"] = train["description"].apply(lambda x: len(re.findall('[a-z]', x)))# 小文字カウント
+    train["captial_num"] = train["description"].apply(lambda x: len(re.findall('[A-Z]', x)))# 大文字カウント
+    train["num_count"] = train["description"].apply(lambda x: len(re.findall('\d', x)))# 数字カウント
+
     test['str_length'] = test['description'].apply(lambda x: len(x))
+    test["lower_num"] = test["description"].apply(lambda x: len(re.findall('[a-z]', x)))
+    test["captial_num"] = test["description"].apply(lambda x: len(re.findall('[A-Z]', x)))
+    test["num_count"] = test["description"].apply(lambda x: len(re.findall('\d', x)))
 
     sentences = pd.concat([train["description"], test["description"]])
 
