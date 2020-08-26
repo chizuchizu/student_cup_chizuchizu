@@ -1,3 +1,4 @@
+import re
 import pandas as pd
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
@@ -57,6 +58,15 @@ def macro_f1(pred: np.array, data: lgb.Dataset):
     return 'macro_f1', f1, True  # True means "higher is better"
 
 
+def simple_fe(data, sentence):
+    memo = sentence["description"]
+    data["str_length"] = memo.apply(lambda x: len(x))
+    # data["lower_num"] = memo.apply(lambda x: len(re.findall('[a-z]', x)))
+    # data["capital_num"] = memo.apply(lambda x: len(re.findall('[A-Z]', x)))
+    data["num_count"] = memo.apply(lambda x: len(re.findall('\d', x)))
+    return data
+
+
 def preprocess():
     train = pd.read_csv(BASE_PATH + "train.csv").drop(['id'], axis=1)  # ["description"]
     test = pd.read_csv(BASE_PATH + "test.csv").drop(["id"], axis=1)  # ["description"]
@@ -104,7 +114,8 @@ def preprocess():
     for model in models:
         for language in languages:
             for test_language in languages:
-                lang_train = pd.read_csv(f"{BASE_PATH}languages/train_{language}_{test_language}_{model}.csv").iloc[:, 1:]
+                lang_train = pd.read_csv(f"{BASE_PATH}languages/train_{language}_{test_language}_{model}.csv").iloc[:,
+                             1:]
                 lang_test = pd.read_csv(f"{BASE_PATH}languages/test_{language}_{test_language}_{model}.csv").iloc[:, 1:]
                 lang_train[f"{language}_pred"] += 1
                 lang_test[f"{language}_pred"] += 1
@@ -136,13 +147,16 @@ def preprocess():
         # train_X = np.concatenate([train_X, lang_train.values], 1)
         # test_X = np.concatenate([test_X, lang_test.values], 1)
 
-    train_X = pd.concat([train_X, pd.read_csv(f"{BASE_PATH}lstm/train_default_lstm.csv")], axis=1)
-    test_X = pd.concat([test_X, pd.read_csv(f"{BASE_PATH}lstm/test_default_lstm.csv")], axis=1)
+    # train_X = pd.concat([train_X, pd.read_csv(f"{BASE_PATH}lstm/train_default_lstm.csv")], axis=1)
+    # test_X = pd.concat([test_X, pd.read_csv(f"{BASE_PATH}lstm/test_default_lstm.csv")], axis=1)
 
     # train_X = pd.concat([train_X, pd.read_csv(f"{BASE_PATH}nn_stacking/train_nn.csv")], axis=1)
     # test_X = pd.concat([test_X, pd.read_csv(f"{BASE_PATH}nn_stacking/test_nn.csv")], axis=1)
     # train_X = pd.concat([train_X, pd.read_csv("../data/languages/train_default_lstm.csv").iloc[:, 1:]], axis=1)
     # test_X = pd.concat([test_X, pd.read_csv("../data/languages/test_default_lstm.csv").iloc[:, 1:]], axis=1)
+
+    # train_X = simple_fe(train_X, train)
+    # test_X = simple_fe(test_X, test)
 
     train_y = train['jobflag'].values - 1  # maps {1, 2, 3 ,4} -> {0, 1, 2, 3}
     return train_X, train_y, test_X
@@ -186,7 +200,7 @@ for fold, (train_idx, valid_idx) in enumerate(kfold.split(train_X, train_y)):
     f1_score += estimator.best_score["valid_1"]["macro_f1"] / N_FOLDS
 
     lgb.plot_importance(estimator, importance_type="gain", max_num_features=25)
-    if debug:
+    if debug and fold == 3:
         plt.show()
 
 pred = stats.mode(pred, axis=1)[0].flatten().astype(int)
