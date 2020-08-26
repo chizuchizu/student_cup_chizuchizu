@@ -220,6 +220,7 @@ def scale_cos(start, end, x):
 def eval_model(model, data_loader, is_train=False):
     all_labels = []
     all_preds = []
+    outputs_ = []
     for batch in data_loader:
         inputs = batch.text[0].to(device)
         if is_train:
@@ -230,8 +231,9 @@ def eval_model(model, data_loader, is_train=False):
             if is_train:
                 all_labels += labels.tolist()
             all_preds += pred.tolist()
+            outputs_ += outputs.tolist()
 
-    return all_labels, all_preds, outputs.cpu().numpy()
+    return all_labels, all_preds, np.array(outputs_)
 
 
 def train_model(model, dl_dict, criterion, optimizer, num_epochs):
@@ -248,12 +250,10 @@ def train_model(model, dl_dict, criterion, optimizer, num_epochs):
     all_oof_preds_ema = list()
     all_test_output = list()
     all_oof_output = list()
-    all_oof_output_ema = list()
-    all_test_output_ema = list()
     for epoch in range(num_epochs):
         all_loss = 0
-        all_labels = []
-        all_preds = []
+        # all_labels = []
+        # all_preds = []
         for batch in dl_dict['train']:
             inputs, inputs_length = batch.text[0].to(device), batch.text[1].to(device)  # 文章
             labels = batch.label.to(device)
@@ -279,7 +279,7 @@ def train_model(model, dl_dict, criterion, optimizer, num_epochs):
 
         test_labels, test_preds, test_output = eval_model(model, dl_dict["test"], is_train=False)
         all_test_preds.append(test_preds)
-        all_oof_output_ema.append(test_output)
+        all_test_output.append(test_output)
         # all_test_preds.append(eval_model(model, dl_dict["test"], is_train=False)[1])
 
     ema.set_weights(ema_model)
@@ -296,16 +296,19 @@ def train_model(model, dl_dict, criterion, optimizer, num_epochs):
     checkpoint_weights = np.array([3 ** epoch for epoch in range(num_epochs)])
     checkpoint_weights = checkpoint_weights / checkpoint_weights.sum()
     # eva/
-    test_y = np.average(all_test_preds, weights=checkpoint_weights, axis=0).astype(float)
-    oof = np.average(all_oof_preds, weights=checkpoint_weights, axis=0).astype(float)
+    # test_y = np.average(all_test_preds, weights=checkpoint_weights, axis=0).astype(float)
+    # oof = np.average(all_oof_preds, weights=checkpoint_weights, axis=0).astype(float)
 
-    output_y = np.average(all_oof_output, weights=checkpoint_weights, axis=0).astype(float)
-    output_oof = np.average(all_test_preds, weights=checkpoint_weights, axis=0).astype(float)
+    output_y = np.average(all_test_output, weights=checkpoint_weights, axis=0).astype(float)
+    output_oof = np.average(all_oof_output, weights=checkpoint_weights, axis=0).astype(float)
 
-    test_y = np.mean([test_y, test_preds_ema], axis=0)
-    oof = np.mean([oof, all_oof_preds_ema], axis=0)
-    test_y = np.array(test_preds_ema)
-    oof = np.array(all_oof_preds_ema)
+    # test_y = np.mean([test_y, test_preds_ema], axis=0)
+    # oof = np.mean([oof, all_oof_preds_ema], axis=0)
+
+    test_y = np.mean([output_y, output_test_ema], axis=0)
+    oof = np.mean([output_oof, output_pred_ema], axis=0)
+    # test_y = np.array(test_preds_ema)
+    # oof = np.array(all_oof_preds_ema)
     # test_y = np.round(test_y).astype(int)
 
     # test_y = np.mean([])
@@ -326,8 +329,8 @@ test_ds = torchtext.data.TabularDataset(
 TEXT.build_vocab(train_ds, vectors=fasttext, min_freq=3)  # buildしないといけないらしいよくわからない
 TEXT.build_vocab(test_ds, vectors=fasttext, min_freq=3)
 kf = KFold(n_splits=4, shuffle=True, random_state=SEED)
-y_pred = np.zeros(test.shape[0])
-oof = np.zeros(train.shape[0])
+y_pred = np.zeros((test.shape[0], 4))
+oof = np.zeros((train.shape[0], 4))
 for fold, (tdx, vdx) in enumerate(kf.split(train_ds.examples)):
     print(fold + 1)
     data_arr = np.array(train_ds.examples)
@@ -349,19 +352,19 @@ for fold, (tdx, vdx) in enumerate(kf.split(train_ds.examples)):
     optimizer = optim.Adam(model.parameters(), lr=0.01)
 
     ema_model, model, test_y, oof_ = train_model(model, dl_dict, criterion, optimizer, NUM_EPOCHS)
-    model_path = f"../models/lstm/ema_{fold}.pth"
+    # model_path = f"../models/lstm/ema_{fold}.pth"
     # torch.save(ema_model.state_dict(), model_path)
-    model_path = f"../models/lstm/lstm_{fold}.pth"
+    # model_path = f"../models/lstm/lstm_{fold}.pth"
     # torch.save(model.state_dict(), model_path)
 
     y_pred += test_y / N_FOLDS
-    oof[vdx] = oof_  # np.round(oof_.astype(float).astype(float)).astype(int)
+    oof[vdx, :] = oof_  # np.round(oof_.astype(float).astype(float)).astype(int)
 
     # y_pred = np.round(y_pred.astype(float)).astype(int)
     model_path = f"../models/lstm/ema_{fold}.pth"
 
 language = "default"
-columns = ["pred"]
+columns = ["0", "1", "2", "3"]
 
 lang_columns = [language + "_lstm_" + x for x in columns]
 
